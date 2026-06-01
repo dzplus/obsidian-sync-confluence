@@ -1,0 +1,32 @@
+{
+	"compilerOptions": {
+		"baseUrl": "src",
+		"inlineSourceMap": true,
+		"inlineSources": true,
+		"module": "ESNext",
+		"target": "ES2018",
+		"allowJs": true,
+		"noImplicitAny": true,
+		"noImplicitThis": true,
+		"noImplicitReturns": true,
+		"moduleResolution": "node",
+		"importHelpers": true,
+		"noUncheckedIndexedAccess": true,
+		"isolatedModules": true,
+		"strictNullChecks": true,
+		"strictBindCallApply": true,
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"useUnknownInCatchVariables": true,
+		"lib": [
+			"DOM",
+			"DOM.Iterable",
+			"ES2018",
+			"ES2019",
+			"ES2020"
+		]
+	},
+	"include": [
+		"src/**/*.ts"
+	]
+}

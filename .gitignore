@@ -1,0 +1,19 @@
+# IDE
+.vscode
+.idea
+*.iml
+
+# dependencies
+node_modules
+
+# build output
+dist/
+
+# sourcemaps
+*.map
+
+# macOS
+.DS_Store
+
+# bun
+bun.lockb

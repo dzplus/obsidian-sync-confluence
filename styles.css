@@ -1,0 +1,120 @@
+/*
+Sync Confluence 插件样式
+*/
+
+/* 状态栏 */
+.sync-confluence-status {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+}
+
+.sync-confluence-status.idle {
+    color: var(--text-muted);
+}
+
+.sync-confluence-status.syncing {
+    color: var(--text-accent);
+    animation: sync-confluence-pulse 1.5s ease-in-out infinite;
+}
+
+.sync-confluence-status.success {
+    color: var(--text-success);
+}
+
+.sync-confluence-status.failed {
+    color: var(--text-error);
+}
+
+@keyframes sync-confluence-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 设置面板分区 */
+.sync-confluence-section {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+    background: var(--background-primary);
+}
+
+.sync-confluence-section h3 {
+    margin-top: 0;
+    color: var(--text-accent);
+}
+
+/* 密钥库提示 */
+.sync-confluence-keyvault-hint {
+    margin: 8px 0 16px 0;
+    padding: 10px 12px;
+    background: var(--background-secondary-alt);
+    border-radius: 6px;
+    border-left: 3px solid var(--interactive-accent);
+    font-size: var(--font-ui-small);
+    color: var(--text-muted);
+}
+
+.sync-confluence-keyvault-hint-label {
+    color: var(--text-normal);
+    font-weight: 500;
+}
+
+/* 认证验证结果 */
+.sync-confluence-auth-result {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: var(--font-ui-small);
+}
+
+.sync-confluence-auth-result.ok {
+    background: var(--background-modifier-success);
+    color: var(--text-success);
+}
+
+.sync-confluence-auth-result.error {
+    background: var(--background-modifier-error);
+    color: var(--text-error);
+}
+
+/* 多行文本框 */
+.sync-confluence-textarea {
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    min-height: 80px;
+    font-family: var(--font-monospace);
+    font-size: var(--font-ui-small);
+    background: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    resize: vertical;
+}
+
+/* 创建绑定笔记弹窗 */
+.sync-confluence-create-form {
+    padding: 8px 0;
+}
+
+.sync-confluence-create-form .setting-item {
+    border-top: none;
+    padding-top: 4px;
+}
+
+/* 确认弹窗 */
+.sync-confluence-confirm-message {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: var(--background-secondary);
+    border-radius: 6px;
+}
+
+.sync-confluence-confirm-message pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-interface);
+    font-size: var(--font-text);
+}

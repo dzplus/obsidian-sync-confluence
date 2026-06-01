@@ -1,0 +1,38 @@
+{
+	"name": "obsidian-sync-confluence",
+	"version": "0.1.0",
+	"description": "定时把 Obsidian 笔记同步到 Confluence 对应页面，通过 frontmatter 中的 confluence_url 绑定",
+	"main": "dist/main.js",
+	"type": "module",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"version": "node version-bump.mjs"
+	},
+	"keywords": [
+		"obsidian",
+		"confluence",
+		"sync"
+	],
+	"license": "0BSD",
+	"author": "duanzhang",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/dzplus/obsidian-sync-confluence.git"
+	},
+	"bugs": {
+		"url": "https://github.com/dzplus/obsidian-sync-confluence/issues"
+	},
+	"homepage": "https://github.com/dzplus/obsidian-sync-confluence#readme",
+	"devDependencies": {
+		"@types/markdown-it": "^14.1.2",
+		"@types/node": "^16.11.6",
+		"esbuild": "0.25.5",
+		"tslib": "2.4.0",
+		"typescript": "^5.8.3"
+	},
+	"dependencies": {
+		"markdown-it": "^14.1.0",
+		"obsidian": "latest"
+	}
+}
