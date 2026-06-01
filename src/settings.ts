@@ -325,7 +325,7 @@ export class SyncConfluenceSettingTab extends PluginSettingTab {
 
 	private renderSection(parent: HTMLElement, title: string, build: (el: HTMLElement) => void): void {
 		const section = parent.createDiv({ cls: 'sync-confluence-section' });
-		section.createEl('h3', { text: title });
+		new Setting(section).setName(title).setHeading();
 		build(section);
 	}
 

@@ -5,6 +5,7 @@ export class StatusBarManager {
 	private plugin: SyncConfluencePlugin;
 	private el: HTMLElement | null = null;
 	private current: SyncStatus = SyncStatus.Idle;
+	private resetTimeoutToken: number | null = null;
 
 	constructor(plugin: SyncConfluencePlugin) {
 		this.plugin = plugin;
@@ -46,7 +47,9 @@ export class StatusBarManager {
 
 	showSuccess(summary?: string): void {
 		this.update(SyncStatus.Success, summary);
-		setTimeout(() => {
+		if (this.resetTimeoutToken !== null) window.clearTimeout(this.resetTimeoutToken);
+		this.resetTimeoutToken = window.setTimeout(() => {
+			this.resetTimeoutToken = null;
 			if (this.current === SyncStatus.Success) this.update(SyncStatus.Idle);
 		}, 4000);
 	}
@@ -56,6 +59,10 @@ export class StatusBarManager {
 	}
 
 	destroy(): void {
+		if (this.resetTimeoutToken !== null) {
+			window.clearTimeout(this.resetTimeoutToken);
+			this.resetTimeoutToken = null;
+		}
 		this.el?.remove();
 		this.el = null;
 	}

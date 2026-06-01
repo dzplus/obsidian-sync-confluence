@@ -51,6 +51,7 @@ export default class SyncConfluencePlugin extends Plugin {
 	private api: ConfluenceApi | null = null;
 	private engine: SyncEngine | null = null;
 	private syncIntervalToken: number | null = null;
+	private startupTimeoutToken: number | null = null;
 
 	async onload() {
 		this.logger = new Logger();
@@ -60,7 +61,7 @@ export default class SyncConfluencePlugin extends Plugin {
 
 		await this.ensureEngine();
 
-		this.addRibbonIcon('cloud-upload', 'Sync Confluence: 同步全部', async () => {
+		this.addRibbonIcon('cloud-upload', '同步全部笔记到 Confluence', async () => {
 			await this.syncAll();
 		});
 
@@ -80,7 +81,10 @@ export default class SyncConfluencePlugin extends Plugin {
 		}
 
 		if (this.settings.syncOnStartup) {
-			window.setTimeout(() => { void this.syncAll(); }, 5000);
+			this.startupTimeoutToken = window.setTimeout(() => {
+				this.startupTimeoutToken = null;
+				void this.syncAll();
+			}, 5000);
 		}
 
 		this.logger.info('插件加载完成');
@@ -88,6 +92,10 @@ export default class SyncConfluencePlugin extends Plugin {
 
 	onunload() {
 		this.stopSyncInterval();
+		if (this.startupTimeoutToken !== null) {
+			window.clearTimeout(this.startupTimeoutToken);
+			this.startupTimeoutToken = null;
+		}
 		this.statusBar?.destroy();
 		this.logger?.info('插件已卸载');
 	}
@@ -308,12 +316,12 @@ export default class SyncConfluencePlugin extends Plugin {
 	private registerCommands(): void {
 		this.addCommand({
 			id: 'sync-all',
-			name: '同步全部到 Confluence',
+			name: '同步全部笔记',
 			callback: () => { void this.syncAll(); },
 		});
 		this.addCommand({
 			id: 'sync-current-file',
-			name: '同步当前笔记到 Confluence',
+			name: '同步当前笔记',
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file) return false;
@@ -323,7 +331,7 @@ export default class SyncConfluencePlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'insert-template',
-			name: '在当前笔记插入 Confluence frontmatter',
+			name: '在当前笔记插入 frontmatter',
 			editorCallback: async (_editor: Editor, view: MarkdownView) => {
 				if (!view.file) { new Notice('没有打开的笔记'); return; }
 				const ok = await insertTemplateFrontmatter(this.app, view.file);
@@ -332,7 +340,7 @@ export default class SyncConfluencePlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'create-bound-note',
-			name: '创建绑定到 Confluence 的笔记',
+			name: '创建绑定笔记',
 			callback: () => {
 				const modal = new CreateBoundNoteModal(this.app, this.settings.scanFolders[0] ?? '', async (path, url) => {
 					await this.ensureFolder(parentOf(path));
@@ -346,7 +354,7 @@ export default class SyncConfluencePlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'export-storage-preview',
-			name: '导出当前笔记的 Confluence storage 预览',
+			name: '导出当前笔记的 storage 预览',
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file) return false;
@@ -356,7 +364,7 @@ export default class SyncConfluencePlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'validate-auth',
-			name: '验证 Confluence 认证',
+			name: '验证认证信息',
 			callback: async () => {
 				const tokenValue = await this.getApiTokenValue();
 				const needsUsername = this.settings.authType === 'basic';

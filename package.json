@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-sync-confluence",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "定时把 Obsidian 笔记同步到 Confluence 对应页面，通过 frontmatter 中的 confluence_url 绑定",
 	"main": "dist/main.js",
 	"type": "module",

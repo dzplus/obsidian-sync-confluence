@@ -1,9 +1,9 @@
 {
 	"id": "sync-confluence",
 	"name": "Sync Confluence",
-	"version": "0.1.0",
-	"minAppVersion": "0.15.0",
-	"description": "定时把 Obsidian 笔记同步到 Confluence 对应页面，通过 frontmatter 中的 confluence_url 绑定",
+	"version": "0.2.0",
+	"minAppVersion": "1.4.0",
+	"description": "Sync notes to Confluence pages on a schedule, bound by a confluence_url field in frontmatter.",
 	"author": "duanzhang",
 	"authorUrl": "https://github.com/dzplus",
 	"isDesktopOnly": true

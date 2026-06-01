@@ -1,44 +1,87 @@
 # Sync Confluence
 
-把 Obsidian 笔记按设定间隔自动推送到 Confluence 对应页面。
+Sync Obsidian notes to Confluence pages on a schedule. Each note is bound to a Confluence page via a `confluence_url` field in its frontmatter — no extra mapping file, no extra UI to keep in sync. Works with both Atlassian Cloud and on-prem Confluence Server / Data Center.
 
-## 工作方式
+> 中文说明见文末。
 
-1. 在笔记 frontmatter 写一行 `confluence_url: https://your-domain.atlassian.net/wiki/spaces/XXX/pages/12345/Title`
-2. 设置页填写 Confluence baseUrl、邮箱、API token
-3. 触发 "立即同步" 或等定时器到点,插件会把笔记正文转成 Confluence storage format 推送过去
+## How it works
 
-## 特性
+1. Add a line to your note's frontmatter:
+   ```yaml
+   confluence_url: https://your-domain.atlassian.net/wiki/spaces/XXX/pages/12345/Title
+   ```
+2. Fill in **base URL**, **auth credentials**, and the API token in the plugin settings.
+3. Trigger **Sync all notes** (ribbon icon / command palette / right-click), or let the timer fire on its interval.
+4. The plugin converts the note body to Confluence storage format and pushes it to the bound page.
 
-- **frontmatter 驱动绑定**:零额外配置,把页面 URL 写进笔记就关联了
-- **内容哈希去重**:无变化的笔记跳过推送
-- **本地附件上传**:`![[image.png]]` 嵌入的本地图片自动作为 Confluence 附件
-- **Mermaid 预渲染**:可选把 mermaid 代码块本地渲染为 PNG 上传(默认开启)
-- **PlantUML 预渲染**:可选走 PlantUML Server 渲染 PNG(默认关闭,需自行开启)
-- **多种触发方式**:Ribbon 图标、命令面板、编辑器/文件右键菜单、定时器
+## Features
 
-## 开发
+- **Frontmatter-driven binding** — drop a page URL into the note, done. No separate config to keep in sync.
+- **Content-hash skip** — unchanged notes are not re-pushed.
+- **Local attachment upload** — `![[image.png]]` embeds are uploaded as Confluence attachments.
+- **Auto-create child pages** — if a note has `confluence_parent_url` instead of `confluence_url`, the first sync creates the page under that parent and writes the new URL back to the note.
+- **Mermaid pre-rendering** — Mermaid code blocks are rendered locally to PNG and uploaded as images (so anyone viewing the Confluence page sees the diagram, even without the Mermaid macro).
+- **PlantUML pre-rendering** — optional, via a PlantUML Server. Off by default.
+- **Multiple triggers** — ribbon icon, command palette, editor/file context menu, scheduled timer.
+
+## Authentication
+
+| Type | Cloud | Server / DC |
+|---|---|---|
+| **Basic** | email + [API token](https://id.atlassian.com/manage-profile/security/api-tokens) | domain account + password |
+| **Bearer** | OAuth Bearer | Personal Access Token (Server 7.9+) |
+
+Tokens are stored via Obsidian's SecretStorage (not in plain config files).
+
+## Installation
+
+### From the community plugin browser
+Pending review. Once accepted, search "Sync Confluence" in Settings → Community plugins.
+
+### From a GitHub Release (manual)
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/dzplus/obsidian-sync-confluence/releases).
+2. Place them in `<vault>/.obsidian/plugins/sync-confluence/`.
+3. Reload Obsidian, then enable the plugin in Settings → Community plugins.
+
+### Via BRAT (recommended for beta tracking)
+Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) from the community store, open BRAT settings, choose **Add Beta plugin**, and enter `dzplus/obsidian-sync-confluence`. BRAT will install the plugin and keep it updated as new releases are tagged.
+
+## Scope and limitations
+
+- **One-way sync only** (Obsidian → Confluence). If someone edits the page directly in Confluence, the next sync overwrites it.
+- **Desktop only**. The plugin relies on Node `https` / `http` modules to work around Confluence Server's XSRF rejection of certain `requestUrl` payloads (POST + JSON, multipart binary). See `src/confluence/api.ts` for the inline rationale.
+- **No Confluence macro coverage beyond the basics**. Common markdown constructs (headings, lists, tables, code blocks, links, images, callouts) are converted; vendor-specific macros are not.
+
+## Development
 
 ```bash
 bun install
-bun run dev        # watch 模式
-bun run build      # 生产构建,输出 dist/
+bun run dev      # watch mode, writes dist/main.js
+bun run build    # production build
 ```
 
-## 安装
+The build copies `manifest.json` and `styles.css` into `dist/` so the directory can be dropped straight into `.obsidian/plugins/sync-confluence/` for local testing.
 
-### 方式 A:从 GitHub Release 手动安装
+To release a new version:
 
-1. 到 [Releases](https://github.com/dzplus/obsidian-sync-confluence/releases) 下载最新版本里的 `main.js`、`manifest.json`、`styles.css` 三个文件
-2. 在 vault 目录下创建 `.obsidian/plugins/sync-confluence/`,把三个文件放进去
-3. 在 Obsidian 设置 → 第三方插件中刷新列表并启用 "Sync Confluence"
+```bash
+npm version 0.2.0          # bumps package.json + manifest + versions.json
+git push && git push --tags
+```
 
-### 方式 B:用 BRAT 自动安装与更新(推荐)
+The `release.yml` workflow then builds and publishes a GitHub Release with the three required files attached.
 
-1. 在 Obsidian 社区插件市场安装 [BRAT](https://github.com/TfTHacker/obsidian42-brat)
-2. 打开 BRAT 设置 → Add Beta plugin → 填入 `dzplus/obsidian-sync-confluence`
-3. BRAT 会自动从 Release 拉取并安装,后续也会自动接收新版本
+## License
 
-## 范围
+[BSD Zero Clause](./LICENSE)
 
-V1 仅支持 Obsidian → Confluence 单向同步;Confluence 端如有改动,下次同步会被覆盖。
+---
+
+## 中文简介
+
+把 Obsidian 笔记按设定间隔自动推送到 Confluence 对应页面。
+
+- **绑定方式**：在笔记 frontmatter 写 `confluence_url`(已有页面)或 `confluence_parent_url`(由插件首次同步时创建子页面)
+- **特性**：内容哈希去重、本地附件自动上传、Mermaid/PlantUML 预渲染、定时器与多种手动触发方式
+- **认证**：支持 Cloud (email + API token) 与 Server/DC (域账号 + 密码 或 PAT),token 走 Obsidian SecretStorage
+- **范围**：仅 Obsidian → Confluence 单向;Confluence 端的改动会在下次同步时被覆盖
