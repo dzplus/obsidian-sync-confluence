@@ -1,4 +1,5 @@
 import type { TFile } from 'obsidian';
+import { t } from './i18n';
 
 export interface LogEntry {
 	timestamp: Date;
@@ -14,12 +15,16 @@ export enum SyncStatus {
 	Failed = 'failed',
 }
 
+/**
+ * Label shown in the status-bar pill. Evaluated lazily via getters so the
+ * active locale (resolved once at i18n load time) is applied at read time.
+ */
 export const SyncStatusText: Record<SyncStatus, string> = {
-	[SyncStatus.Idle]: '☁ 空闲',
-	[SyncStatus.Syncing]: '☁ 同步中',
-	[SyncStatus.Success]: '☁ 已同步',
-	[SyncStatus.Failed]: '☁ 失败',
-};
+	get [SyncStatus.Idle]() { return t('status.idle'); },
+	get [SyncStatus.Syncing]() { return t('status.syncing'); },
+	get [SyncStatus.Success]() { return t('status.success'); },
+	get [SyncStatus.Failed]() { return t('status.failed'); },
+} as Record<SyncStatus, string>;
 
 /** 单个笔记的 Confluence 绑定信息(从 frontmatter 读出) */
 export interface NoteBinding {

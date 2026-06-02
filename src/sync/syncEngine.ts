@@ -129,7 +129,7 @@ export class SyncEngine {
 					spaceKey: parent.spaceKey,
 					parentId,
 					title,
-					storageXhtml: '<p>(同步中...)</p>',
+					storageXhtml: '<p>(syncing…)</p>',
 				});
 				pageId = created.id;
 				createdNewPage = true;

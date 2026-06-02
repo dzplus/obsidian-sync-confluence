@@ -21,9 +21,12 @@ import { StatusBarManager } from './ui/statusBar';
 import { CreateBoundNoteModal } from './ui/createBoundNoteModal';
 import { insertTemplateFrontmatter } from './frontmatter/handler';
 import { SyncStatus } from './types';
+import { t } from './i18n';
 
 const TEMPLATE_FILENAME = 'confluence-note.md';
-const TEMPLATE_CONTENT = `---
+
+function buildTemplateContent(): string {
+	return `---
 confluence_url:
 confluence_parent_url:
 confluence_page_id:
@@ -31,17 +34,15 @@ confluence_last_synced:
 confluence_last_hash:
 ---
 
-# 标题
+${t('template.title')}
 
-> 两种用法二选一:
-> 1. 已有 Confluence 页面 → 把目标页面 URL 填到 \`confluence_url\`
-> 2. 还没建页面 → 把父页面 URL 填到 \`confluence_parent_url\`,首次同步时插件会自动以本笔记文件名为标题创建子页面,并把新页面 URL 回写到 \`confluence_url\`
-> 其余字段(page_id / last_synced / last_hash)由插件自动维护。
+${t('template.usage')}
 
-## 正文
+${t('template.bodyHeading')}
 
-在这里写内容...
+${t('template.bodyPlaceholder')}
 `;
+}
 
 export default class SyncConfluencePlugin extends Plugin {
 	settings!: SyncConfluenceSettings;
@@ -55,13 +56,13 @@ export default class SyncConfluencePlugin extends Plugin {
 
 	async onload() {
 		this.logger = new Logger();
-		this.logger.info('插件加载中...');
+		this.logger.info(t('plugin.loading'));
 
 		await this.loadSettings();
 
 		await this.ensureEngine();
 
-		this.addRibbonIcon('cloud-upload', '同步全部笔记到 Confluence', async () => {
+		this.addRibbonIcon('cloud-upload', t('plugin.ribbonTooltip'), async () => {
 			await this.syncAll();
 		});
 
@@ -87,7 +88,7 @@ export default class SyncConfluencePlugin extends Plugin {
 			}, 5000);
 		}
 
-		this.logger.info('插件加载完成');
+		this.logger.info(t('plugin.loaded'));
 	}
 
 	onunload() {
@@ -97,7 +98,7 @@ export default class SyncConfluencePlugin extends Plugin {
 			this.startupTimeoutToken = null;
 		}
 		this.statusBar?.destroy();
-		this.logger?.info('插件已卸载');
+		this.logger?.info(t('plugin.unloaded'));
 	}
 
 	async loadSettings() {
@@ -167,28 +168,28 @@ export default class SyncConfluencePlugin extends Plugin {
 	async syncAll(): Promise<void> {
 		await this.ensureEngine();
 		if (!this.engine) {
-			new Notice('请先在设置中填写 Confluence 认证信息');
+			new Notice(t('notice.fillAuthFirst'));
 			return;
 		}
-		this.statusBar?.showSyncing('同步中...');
+		this.statusBar?.showSyncing(t('status.syncing'));
 		const r = await this.engine.syncAll();
 		if (!r) {
 			this.statusBar?.update(SyncStatus.Idle);
 			return;
 		}
-		const summary = `更新 ${r.updated} / 跳过 ${r.skipped} / 失败 ${r.failed}`;
+		const summary = t('summary.all', { updated: r.updated, skipped: r.skipped, failed: r.failed });
 		if (r.failed === 0) {
 			this.statusBar?.showSuccess(summary);
-			if (this.settings.showNotice && r.total > 0) new Notice(`Sync Confluence: ${summary}`);
+			if (this.settings.showNotice && r.total > 0) new Notice(t('notice.syncResult', { summary }));
 		} else {
 			this.statusBar?.showFailed(summary);
-			if (this.settings.showNotice) new Notice(`Sync Confluence 部分失败: ${summary}`);
+			if (this.settings.showNotice) new Notice(t('notice.syncPartialFail', { summary }));
 		}
 	}
 
 	async syncCurrentFile(): Promise<void> {
 		const file = this.app.workspace.getActiveFile();
-		if (!file) { new Notice('没有打开的笔记'); return; }
+		if (!file) { new Notice(t('notice.noteNotOpen')); return; }
 		await this.syncFile(file);
 	}
 
@@ -196,46 +197,51 @@ export default class SyncConfluencePlugin extends Plugin {
 	async syncFolder(folder: TFolder): Promise<void> {
 		await this.ensureEngine();
 		if (!this.engine) {
-			new Notice('请先在设置中填写 Confluence 认证信息');
+			new Notice(t('notice.fillAuthFirst'));
 			return;
 		}
 		const files = this.collectBoundFilesUnder(folder);
 		if (files.length === 0) {
-			new Notice(`${folder.name} 下没有绑定的笔记`);
+			new Notice(t('notice.folderNoBoundNotes', { folder: folder.name }));
 			return;
 		}
-		this.statusBar?.showSyncing(`同步 ${folder.name}/`);
-		this.logger.info(`同步文件夹 ${folder.path}: ${files.length} 个绑定笔记`);
+		this.statusBar?.showSyncing(folder.name + '/');
+		this.logger.info(`Sync folder ${folder.path}: ${files.length} bound notes`);
 		const r = await this.engine.syncFiles(files);
 		if (!r) { this.statusBar?.update(SyncStatus.Idle); return; }
-		const summary = `${folder.name}/: 更新 ${r.updated} / 跳过 ${r.skipped} / 失败 ${r.failed}`;
+		const summary = t('summary.folder', {
+			folder: folder.name,
+			updated: r.updated,
+			skipped: r.skipped,
+			failed: r.failed,
+		});
 		if (r.failed === 0) {
 			this.statusBar?.showSuccess(summary);
-			if (this.settings.showNotice) new Notice(`Sync Confluence: ${summary}`);
+			if (this.settings.showNotice) new Notice(t('notice.syncResult', { summary }));
 		} else {
 			this.statusBar?.showFailed(summary);
-			if (this.settings.showNotice) new Notice(`Sync Confluence 部分失败: ${summary}`);
+			if (this.settings.showNotice) new Notice(t('notice.syncPartialFail', { summary }));
 		}
 	}
 
 	async syncFile(file: TFile): Promise<void> {
 		await this.ensureEngine();
 		if (!this.engine) {
-			new Notice('请先在设置中填写 Confluence 认证信息');
+			new Notice(t('notice.fillAuthFirst'));
 			return;
 		}
-		this.statusBar?.showSyncing('同步中...');
+		this.statusBar?.showSyncing(t('status.syncing'));
 		const r = await this.engine.syncOne(file);
 		if (!r) { this.statusBar?.update(SyncStatus.Idle); return; }
 		if (r.skipped) {
-			this.statusBar?.update(SyncStatus.Idle, '内容未变,已跳过');
-			if (this.settings.showNotice) new Notice(`无变化,跳过: ${file.name}`);
+			this.statusBar?.update(SyncStatus.Idle);
+			if (this.settings.showNotice) new Notice(t('notice.syncedNoChange', { file: file.name }));
 		} else if (r.success) {
-			this.statusBar?.showSuccess('同步成功');
-			if (this.settings.showNotice) new Notice(`已同步: ${file.name}`);
+			this.statusBar?.showSuccess();
+			if (this.settings.showNotice) new Notice(t('notice.syncedOk', { file: file.name }));
 		} else {
 			this.statusBar?.showFailed(r.error);
-			new Notice(`同步失败: ${file.name}\n${r.error ?? ''}`);
+			new Notice(t('notice.syncedFail', { file: file.name, error: r.error ?? '' }));
 		}
 	}
 
@@ -248,7 +254,7 @@ export default class SyncConfluencePlugin extends Plugin {
 			const id = window.setInterval(() => { void this.syncAll(); }, ms);
 			this.registerInterval(id);
 			this.syncIntervalToken = id;
-			this.logger.info(`定时同步已启动,间隔 ${this.settings.syncInterval} 分钟`);
+			this.logger.info(`Scheduled sync started, interval ${this.settings.syncInterval} min`);
 		}
 	}
 
@@ -268,22 +274,23 @@ export default class SyncConfluencePlugin extends Plugin {
 			await this.ensureFolder(folder);
 			const fullPath = folder + '/' + TEMPLATE_FILENAME;
 			const existing = this.app.vault.getAbstractFileByPath(fullPath);
+			const content = buildTemplateContent();
 			if (existing instanceof TFile) {
 				if (!force) return true;
-				await this.app.vault.modify(existing, TEMPLATE_CONTENT);
+				await this.app.vault.modify(existing, content);
 			} else {
 				try {
-					await this.app.vault.create(fullPath, TEMPLATE_CONTENT);
+					await this.app.vault.create(fullPath, content);
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : String(e);
 					if (/already exists/i.test(msg)) return true;
 					throw e;
 				}
 			}
-			this.logger.info(`模板已写入: ${fullPath}`);
+			this.logger.info(`Template written: ${fullPath}`);
 			return true;
 		} catch (e) {
-			this.logger.error('模板写入失败', e instanceof Error ? e.message : String(e));
+			this.logger.error('Failed to write template', e instanceof Error ? e.message : String(e));
 			return false;
 		}
 	}
@@ -316,12 +323,12 @@ export default class SyncConfluencePlugin extends Plugin {
 	private registerCommands(): void {
 		this.addCommand({
 			id: 'sync-all',
-			name: '同步全部笔记',
+			name: t('command.syncAll'),
 			callback: () => { void this.syncAll(); },
 		});
 		this.addCommand({
 			id: 'sync-current-file',
-			name: '同步当前笔记',
+			name: t('command.syncCurrent'),
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file) return false;
@@ -331,20 +338,20 @@ export default class SyncConfluencePlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'insert-template',
-			name: '在当前笔记插入 frontmatter',
+			name: t('command.insertTemplate'),
 			editorCallback: async (_editor: Editor, view: MarkdownView) => {
-				if (!view.file) { new Notice('没有打开的笔记'); return; }
+				if (!view.file) { new Notice(t('notice.noteNotOpen')); return; }
 				const ok = await insertTemplateFrontmatter(this.app, view.file);
-				new Notice(ok ? 'frontmatter 已插入' : '该笔记已有 confluence_url,跳过');
+				new Notice(ok ? t('notice.frontmatterInsertedShort') : t('notice.frontmatterAlreadyExists'));
 			},
 		});
 		this.addCommand({
 			id: 'create-bound-note',
-			name: '创建绑定笔记',
+			name: t('command.createBoundNote'),
 			callback: () => {
 				const modal = new CreateBoundNoteModal(this.app, this.settings.scanFolders[0] ?? '', async (path, url) => {
 					await this.ensureFolder(parentOf(path));
-					const file = await this.app.vault.create(path, TEMPLATE_CONTENT);
+					const file = await this.app.vault.create(path, buildTemplateContent());
 					await insertTemplateFrontmatter(this.app, file, url);
 					await this.app.workspace.openLinkText(file.path, '', false);
 					return file;
@@ -354,7 +361,7 @@ export default class SyncConfluencePlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'export-storage-preview',
-			name: '导出当前笔记的 storage 预览',
+			name: t('command.exportStoragePreview'),
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file) return false;
@@ -364,12 +371,12 @@ export default class SyncConfluencePlugin extends Plugin {
 		});
 		this.addCommand({
 			id: 'validate-auth',
-			name: '验证认证信息',
+			name: t('command.validateAuth'),
 			callback: async () => {
 				const tokenValue = await this.getApiTokenValue();
 				const needsUsername = this.settings.authType === 'basic';
 				if (!this.settings.confluenceBaseUrl || (needsUsername && !this.settings.username) || !tokenValue) {
-					new Notice('请先填写 Confluence 认证信息');
+					new Notice(t('notice.fillAuthFirst'));
 					return;
 				}
 				const api = new ConfluenceApi({
@@ -379,7 +386,9 @@ export default class SyncConfluencePlugin extends Plugin {
 					apiToken: tokenValue,
 				});
 				const r = await api.validateAuth();
-				new Notice(r.ok ? `认证成功: ${r.displayName}` : `认证失败: ${r.error}`);
+				new Notice(r.ok
+					? t('notice.authOk', { name: r.displayName ?? '' })
+					: t('notice.authFail', { error: r.error ?? '' }));
 			},
 		});
 	}
@@ -391,16 +400,16 @@ export default class SyncConfluencePlugin extends Plugin {
 			if (!file || file.extension !== 'md') return;
 			if (this.fileIsBound(file)) {
 				menu.addItem((item) => item
-					.setTitle('同步到 Confluence')
+					.setTitle(t('menu.syncToConfluence'))
 					.setIcon('cloud-upload')
 					.onClick(() => { void this.syncFile(file); }));
 			} else {
 				menu.addItem((item) => item
-					.setTitle('插入 Confluence frontmatter')
+					.setTitle(t('menu.insertFrontmatter'))
 					.setIcon('cloud')
 					.onClick(async () => {
 						const ok = await insertTemplateFrontmatter(this.app, file);
-						new Notice(ok ? 'frontmatter 已插入,把 confluence_url 改为目标页面 URL' : '该笔记已有 confluence_url');
+						new Notice(ok ? t('notice.frontmatterInserted') : t('notice.frontmatterAlreadyExists'));
 					}));
 			}
 		}));
@@ -410,7 +419,7 @@ export default class SyncConfluencePlugin extends Plugin {
 			if (fileOrFolder instanceof TFolder) {
 				if (!this.folderHasBoundFile(fileOrFolder)) return;
 				menu.addItem((item) => item
-					.setTitle('同步到 Confluence(整个文件夹)')
+					.setTitle(t('menu.syncFolder'))
 					.setIcon('cloud-upload')
 					.onClick(() => { void this.syncFolder(fileOrFolder); }));
 				return;
@@ -419,16 +428,16 @@ export default class SyncConfluencePlugin extends Plugin {
 			const file = fileOrFolder;
 			if (this.fileIsBound(file)) {
 				menu.addItem((item) => item
-					.setTitle('同步到 Confluence')
+					.setTitle(t('menu.syncToConfluence'))
 					.setIcon('cloud-upload')
 					.onClick(() => { void this.syncFile(file); }));
 			} else {
 				menu.addItem((item) => item
-					.setTitle('插入 Confluence frontmatter')
+					.setTitle(t('menu.insertFrontmatter'))
 					.setIcon('cloud')
 					.onClick(async () => {
 						const ok = await insertTemplateFrontmatter(this.app, file);
-						new Notice(ok ? 'frontmatter 已插入,打开笔记把 confluence_url 改为目标页面 URL' : '该笔记已有 confluence_url');
+						new Notice(ok ? t('notice.frontmatterInsertedFileMenu') : t('notice.frontmatterAlreadyExists'));
 					}));
 			}
 		}));
@@ -458,9 +467,9 @@ export default class SyncConfluencePlugin extends Plugin {
 			} else {
 				await this.app.vault.create(previewPath, lines);
 			}
-			new Notice(`已导出 storage 预览: ${previewPath}`);
+			new Notice(t('notice.exportPreviewOk', { path: previewPath }));
 		} catch (e) {
-			new Notice('导出预览失败: ' + (e instanceof Error ? e.message : String(e)));
+			new Notice(t('notice.exportPreviewFailed', { error: e instanceof Error ? e.message : String(e) }));
 		}
 	}
 

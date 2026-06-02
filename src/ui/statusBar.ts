@@ -1,5 +1,6 @@
 import { SyncStatus, SyncStatusText } from '../types';
 import type SyncConfluencePlugin from '../main';
+import { getLocale, t } from '../i18n';
 
 export class StatusBarManager {
 	private plugin: SyncConfluencePlugin;
@@ -30,19 +31,20 @@ export class StatusBarManager {
 
 	private defaultTooltip(status: SyncStatus): string {
 		const last = this.plugin.logger?.getLastSyncTime();
-		const lastStr = last ? `最后同步: ${last.toLocaleString('zh-CN')}` : '';
+		const localeTag = getLocale() === 'zh' ? 'zh-CN' : 'en-US';
+		const lastSuffix = last ? t('status.tooltipLastSync', { time: last.toLocaleString(localeTag) }) : '';
 		switch (status) {
-			case SyncStatus.Idle: return `Sync Confluence: 空闲${lastStr ? ' - ' + lastStr : ''}`;
-			case SyncStatus.Syncing: return 'Sync Confluence: 正在同步...';
-			case SyncStatus.Success: return `Sync Confluence: 同步完成 - ${new Date().toLocaleTimeString('zh-CN')}`;
-			case SyncStatus.Failed: return 'Sync Confluence: 同步失败';
+			case SyncStatus.Idle: return t('status.tooltipIdle', { lastSuffix });
+			case SyncStatus.Syncing: return t('status.tooltipSyncing');
+			case SyncStatus.Success: return t('status.tooltipSuccess', { time: new Date().toLocaleTimeString(localeTag) });
+			case SyncStatus.Failed: return t('status.tooltipFailed');
 			default: return 'Sync Confluence';
 		}
 	}
 
 	showSyncing(text?: string): void {
 		this.update(SyncStatus.Syncing);
-		if (this.el && text) this.el.setText(`☁ ${text}`);
+		if (this.el && text) this.el.setText(t('status.syncingLabelPrefix', { text }));
 	}
 
 	showSuccess(summary?: string): void {
@@ -55,7 +57,7 @@ export class StatusBarManager {
 	}
 
 	showFailed(error?: string): void {
-		this.update(SyncStatus.Failed, error ? `同步失败: ${error}` : undefined);
+		this.update(SyncStatus.Failed, error ? t('status.tooltipFailedWithError', { error }) : undefined);
 	}
 
 	destroy(): void {

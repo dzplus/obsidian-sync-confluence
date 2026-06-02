@@ -1,4 +1,5 @@
 import { App, Modal, Setting } from 'obsidian';
+import { t } from '../i18n';
 
 export class ConfirmModal extends Modal {
 	constructor(
@@ -16,7 +17,7 @@ export class ConfirmModal extends Modal {
 		const msgEl = this.contentEl.createDiv({ cls: 'sync-confluence-confirm-message' });
 		msgEl.createEl('pre', { text: this.message });
 		new Setting(this.contentEl)
-			.addButton((btn) => btn.setButtonText('取消').onClick(() => {
+			.addButton((btn) => btn.setButtonText(t('modal.confirm.cancel')).onClick(() => {
 				this.resolve(false);
 				this.close();
 			}))
@@ -31,8 +32,8 @@ export class ConfirmModal extends Modal {
 	}
 }
 
-export function showConfirm(app: App, title: string, message: string, confirmText = '确定'): Promise<boolean> {
+export function showConfirm(app: App, title: string, message: string, confirmText?: string): Promise<boolean> {
 	return new Promise((resolve) => {
-		new ConfirmModal(app, title, message, confirmText, resolve).open();
+		new ConfirmModal(app, title, message, confirmText ?? t('modal.confirm.defaultOk'), resolve).open();
 	});
 }

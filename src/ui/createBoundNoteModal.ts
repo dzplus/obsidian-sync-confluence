@@ -1,5 +1,6 @@
 import { App, Modal, Notice, Setting, TFile } from 'obsidian';
 import { parsePageIdFromUrl } from '../confluence/urlParser';
+import { t } from '../i18n';
 
 export interface CreateBoundNoteResult {
 	file: TFile;
@@ -12,7 +13,7 @@ export class CreateBoundNoteModal extends Modal {
 
 	constructor(
 		app: App,
-		private defaultFolder: string,
+		defaultFolder: string,
 		private onCreate: (path: string, url: string) => Promise<TFile>,
 	) {
 		super(app);
@@ -21,36 +22,36 @@ export class CreateBoundNoteModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.titleEl.setText('创建绑定到 Confluence 的笔记');
+		this.titleEl.setText(t('modal.createBoundNote.title'));
 
 		const wrap = this.contentEl.createDiv({ cls: 'sync-confluence-create-form' });
 
 		new Setting(wrap)
-			.setName('笔记路径')
-			.setDesc('相对 vault 根的路径,自动补 .md')
-			.addText((t) => t.setValue(this.notePath).onChange((v) => { this.notePath = v.trim(); }));
+			.setName(t('modal.createBoundNote.notePathName'))
+			.setDesc(t('modal.createBoundNote.notePathDesc'))
+			.addText((tx) => tx.setValue(this.notePath).onChange((v) => { this.notePath = v.trim(); }));
 
 		new Setting(wrap)
-			.setName('Confluence 页面 URL')
-			.setDesc('支持 /pages/{id}/ 与 ?pageId={id} 两种 URL 形式')
-			.addText((t) => t
+			.setName(t('modal.createBoundNote.urlName'))
+			.setDesc(t('modal.createBoundNote.urlDesc'))
+			.addText((tx) => tx
 				.setPlaceholder('https://xxx.atlassian.net/wiki/spaces/XXX/pages/12345/Title')
 				.onChange((v) => { this.url = v.trim(); }));
 
 		new Setting(wrap)
-			.addButton((btn) => btn.setButtonText('取消').onClick(() => this.close()))
-			.addButton((btn) => btn.setButtonText('创建').setCta().onClick(async () => {
-				if (!this.notePath) { new Notice('请填写笔记路径'); return; }
-				if (!this.url) { new Notice('请填写 Confluence URL'); return; }
+			.addButton((btn) => btn.setButtonText(t('modal.createBoundNote.cancel')).onClick(() => this.close()))
+			.addButton((btn) => btn.setButtonText(t('modal.createBoundNote.create')).setCta().onClick(async () => {
+				if (!this.notePath) { new Notice(t('notice.pathRequired')); return; }
+				if (!this.url) { new Notice(t('notice.urlRequired')); return; }
 				if (!parsePageIdFromUrl(this.url)) {
-					new Notice('无法从 URL 解析 page ID');
+					new Notice(t('notice.urlCannotParsePageId'));
 					return;
 				}
 				try {
 					await this.onCreate(this.notePath.endsWith('.md') ? this.notePath : this.notePath + '.md', this.url);
 					this.close();
 				} catch (e) {
-					new Notice('创建失败: ' + (e instanceof Error ? e.message : String(e)));
+					new Notice(t('notice.createFailed', { error: e instanceof Error ? e.message : String(e) }));
 				}
 			}));
 	}
