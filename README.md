@@ -156,6 +156,20 @@ confluence_page_id: 12345, ""
 - `confluence_last_hash` — content hash; equal hash = sync is a no-op.
 - `confluence_attachments` — page ID → filename → `{hash, id}` cache, used to skip re-uploading unchanged attachments.
 
+## 🔗 Links & mentions
+
+**Wikilinks.** `[[Other Note]]` / `[[Other Note|alias]]` (and standard `[text](note.md)` links) are resolved through Obsidian's metadata cache. If the target note has a `confluence_url` binding, the link becomes a hyperlink to that Confluence page; otherwise it degrades to plain text. Batch syncs pre-create placeholder pages for parent-only notes first, so cross-references inside the same batch resolve on the first sync.
+
+**User mentions (Server / DC only).** Write `@[[John Doe]]` to mention a Confluence user. The plugin looks up the linked note (`John Doe.md`) and reads `confluence_username` from its frontmatter:
+
+```yaml
+---
+confluence_username: john.d
+---
+```
+
+If the field is present the mention becomes a real Confluence user link (notification + profile link); if the note or field is missing it degrades to plain `@John Doe` text. Mentions inside code blocks are left untouched. The plugin never queries the Confluence user API during sync — maintain the username once per person note and it works offline from then on. Cloud is not supported yet (Cloud storage format requires `ri:account-id`).
+
 ## 🎨 Diagram rendering (optional)
 
 | Source | Plugin behavior |
@@ -189,6 +203,8 @@ Right-click menus:
 - **In the editor** — Sync this note / Insert frontmatter (whichever applies).
 - **In the file tree on a note** — same as above.
 - **In the file tree on a folder** — Sync every bound note under this folder (recursive).
+
+Properties panel: when a note has a `confluence_url` property, the plugin adds two icons next to the property key — **sync this note** and **open in Confluence** (multiple bound pages pop a picker menu). There is deliberately no one-click "unbind" button; destructive actions don't belong one click away in the properties panel.
 
 ## 🛠️ Troubleshooting
 
@@ -374,6 +390,20 @@ confluence_page_id: 12345, ""
 - `confluence_last_hash` —— 内容哈希；哈希一致就跳过本次同步。
 - `confluence_attachments` —— Page ID → 文件名 → `{hash, id}` 附件缓存，用于跳过未变附件。
 
+### 🔗 链接与 mention
+
+**Wikilink。** `[[另一篇笔记]]` / `[[另一篇笔记|别名]]`（以及标准 `[文本](note.md)` 链接）会经 Obsidian metadata cache 解析：目标笔记已绑定 `confluence_url` → 替换为指向那个 Confluence 页面的超链接；未绑定 → 降级为纯文本。批量同步会先给"仅有 parent"的笔记预建占位页，同批笔记互相引用首次同步即可解析。
+
+**用户 mention（仅 Server / DC）。** 写 `@[[张三]]` 即可 mention Confluence 用户。插件查找被链接的笔记（`张三.md`），读其 frontmatter 的 `confluence_username`：
+
+```yaml
+---
+confluence_username: zhangsan
+---
+```
+
+字段存在 → 变成真实的 Confluence 用户链接（会通知对方、可点进个人页）；笔记或字段缺失 → 降级为纯文本 `@张三`。代码块里的 mention 原样保留。插件同步过程**不会**调 Confluence 用户搜索 API——每人维护一次 username 后离线可用。Cloud 暂不支持（Cloud storage 格式要求 `ri:account-id`）。
+
 ### 🎨 图表渲染（可选）
 
 | 源 | 插件行为 |
@@ -407,6 +437,8 @@ confluence_page_id: 12345, ""
 - **编辑器内** —— 同步该笔记 / 插入 frontmatter（按是否已绑定切换）
 - **文件树里点笔记** —— 同上
 - **文件树里点文件夹** —— 同步该文件夹下所有已绑定笔记（递归）
+
+属性面板：笔记有 `confluence_url` 属性时，插件在属性名旁注入两个图标 —— **同步当前笔记** 和 **在 Confluence 中打开**（绑定多个页面时弹菜单选择）。有意不做一键"解绑"按钮：破坏性操作不该在属性面板一击可达。
 
 ### 🛠️ 排错
 

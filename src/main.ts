@@ -18,6 +18,7 @@ import { MarkdownConverter } from './confluence/markdownConverter';
 import { SyncEngine } from './sync/syncEngine';
 import { Logger } from './utils/logger';
 import { StatusBarManager } from './ui/statusBar';
+import { PropertyActionsManager } from './ui/propertyActions';
 import { CreateBoundNoteModal } from './ui/createBoundNoteModal';
 import { frontmatterHasBinding, insertTemplateFrontmatter, type Frontmatter } from './frontmatter/handler';
 import { SyncStatus } from './types';
@@ -48,6 +49,7 @@ export default class SyncConfluencePlugin extends Plugin {
 	settings!: SyncConfluenceSettings;
 	logger!: Logger;
 	statusBar: StatusBarManager | null = null;
+	propertyActions: PropertyActionsManager | null = null;
 
 	private api: ConfluenceApi | null = null;
 	private engine: SyncEngine | null = null;
@@ -75,6 +77,9 @@ export default class SyncConfluencePlugin extends Plugin {
 			this.statusBar.create();
 		}
 
+		this.propertyActions = new PropertyActionsManager(this);
+		this.propertyActions.start();
+
 		this.restartSyncInterval();
 
 		if (this.settings.autoInstallTemplate) {
@@ -97,6 +102,8 @@ export default class SyncConfluencePlugin extends Plugin {
 			window.clearTimeout(this.startupTimeoutToken);
 			this.startupTimeoutToken = null;
 		}
+		this.propertyActions?.destroy();
+		this.propertyActions = null;
 		this.statusBar?.destroy();
 		this.logger?.info(t('plugin.unloaded'));
 	}

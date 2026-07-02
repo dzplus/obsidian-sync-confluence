@@ -54,6 +54,11 @@ export const zh: Messages = {
 		syncFolder: '同步到 Confluence(整个文件夹)',
 	},
 
+	propertyActions: {
+		sync: '同步到 Confluence',
+		open: '在 Confluence 中打开',
+	},
+
 	status: {
 		idle: '☁ 空闲',
 		syncing: '☁ 同步中',

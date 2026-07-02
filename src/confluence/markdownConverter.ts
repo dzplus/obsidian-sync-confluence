@@ -35,10 +35,16 @@ export interface ConvertContext {
 	 * 返回 null/undefined → 维持原行为(降级为纯文本)。
 	 */
 	resolveWikilink?: (linkpath: string, sourcePath: string) => string | null;
+	/**
+	 * 把 @[[Name]] mention 解析成 Confluence 用户名(issue #3,Server/DC 的 ri:username)。
+	 * 返回 null/undefined → 降级为纯文本 `@Name`。
+	 */
+	resolveMention?: (linkpath: string, sourcePath: string) => string | null;
 }
 
 interface PreprocessOptions {
 	resolveWikilink?: (linkpath: string, sourcePath: string) => string | null;
+	resolveMention?: (linkpath: string, sourcePath: string) => string | null;
 	sourcePath?: string;
 }
 
@@ -75,6 +81,7 @@ export class MarkdownConverter {
 		const body = stripFrontmatter(markdown);
 		const preprocessed = preprocessObsidianSyntax(body, {
 			resolveWikilink: ctx.resolveWikilink,
+			resolveMention: ctx.resolveMention,
 			sourcePath,
 		});
 
@@ -94,11 +101,15 @@ export class MarkdownConverter {
 	async computeContentHash(
 		markdown: string,
 		sourcePath: string,
-		opts?: { resolveWikilink?: (linkpath: string, sourcePath: string) => string | null },
+		opts?: {
+			resolveWikilink?: (linkpath: string, sourcePath: string) => string | null;
+			resolveMention?: (linkpath: string, sourcePath: string) => string | null;
+		},
 	): Promise<string> {
 		const body = stripFrontmatter(markdown);
 		const preprocessed = preprocessObsidianSyntax(body, {
 			resolveWikilink: opts?.resolveWikilink,
+			resolveMention: opts?.resolveMention,
 			sourcePath,
 		});
 		return sha1Hex(preprocessed);
@@ -276,6 +287,23 @@ function preprocessObsidianSyntax(md: string, opts?: PreprocessOptions): string 
 	// 先把代码区(fenced + inline)替换成占位符,避免代码示例里的 ![[...]] / [[...]] 被改写
 	const { masked, restore } = maskCodeRegions(md);
 	let s = masked;
+
+	// 0. @[[Name]] / @[[Name|alias]] mention → PUA 哨兵(postProcessHtml 里替换为 <ac:link><ri:user>)。
+	//    必须先于规则 1/2 跑,否则内层 [[Name]] 会被通用 wikilink 规则消化掉。
+	//    解析不到 confluence_username → 降级为纯文本 `@Name`,与 issue #3 的 graceful degradation 一致。
+	{
+		const resolveMention = opts?.resolveMention;
+		const sourcePath = opts?.sourcePath;
+		s = s.replace(/@\[\[([^\]\n|\\]+)(?:\\?\|([^\]\n]*))?\]\]/g, (_full, link: string, alias: string) => {
+			const linkpath = link.trim().split('#')[0]!.trim();
+			const text = (alias ?? '').trim() || link.trim().split('/').pop() || link.trim();
+			if (resolveMention && sourcePath && linkpath) {
+				const username = resolveMention(linkpath, sourcePath);
+				if (username) return `MENTION:${username}`;
+			}
+			return `@${text}`;
+		});
+	}
 
 	// 1. ![[...]] embed → ![alt](path)
 	//    - `[^|\\]+` + `\\?\|` 兼容 markdown 表格内 escaped pipe(`\|`)
@@ -492,6 +520,10 @@ function postProcessHtml(html: string, _ctx: ConvertContext): string {
 		const re = new RegExp(`<${tag}\\b([^>]*?)(?<!/)>`, 'gi');
 		out = out.replace(re, `<${tag}$1 />`);
 	}
+	// @[[Name]] mention 哨兵 → Confluence 用户链接(preprocess 阶段埋入,穿透 markdown-it 的 HTML 转义)
+	out = out.replace(/MENTION:([^]*)/g, (_full, username: string) => {
+		return `<ac:link><ri:user ri:username="${escapeAttr(username)}" /></ac:link>`;
+	});
 	return stripSupplementaryChars(out).trim();
 }
 

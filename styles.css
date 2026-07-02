@@ -118,3 +118,30 @@ Sync Confluence 插件样式
     font-family: var(--font-interface);
     font-size: var(--font-text);
 }
+
+/* properties 面板 confluence_url 行内操作按钮 (issue #2) */
+.sync-confluence-prop-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+}
+
+.sync-confluence-prop-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    cursor: pointer;
+    opacity: 0.6;
+    color: var(--text-muted);
+}
+
+.sync-confluence-prop-btn:hover {
+    opacity: 1;
+    color: var(--text-normal);
+}
+
+.sync-confluence-prop-btn svg {
+    width: 14px;
+    height: 14px;
+}

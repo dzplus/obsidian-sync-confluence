@@ -149,7 +149,8 @@ export class SyncEngine {
 
 			const markdown = await this.deps.app.vault.cachedRead(file);
 			const resolveWikilink = this.makeWikilinkResolver();
-			const contentHash = await this.converter.computeContentHash(markdown, path, { resolveWikilink });
+			const resolveMention = this.makeMentionResolver();
+			const contentHash = await this.converter.computeContentHash(markdown, path, { resolveWikilink, resolveMention });
 			const refs = await this.converter.extractReferences(markdown, path, {
 				mermaidExt: this.mermaid?.extension(),
 			});
@@ -174,6 +175,7 @@ export class SyncEngine {
 				renderMermaidToPng: this.deps.settings.renderMermaidToPng,
 				renderPlantUmlToPng: this.deps.settings.renderPlantUmlToPng,
 				resolveWikilink,
+				resolveMention,
 			};
 			const storageXhtml = await this.converter.convert(markdown, path, ctx);
 
@@ -261,6 +263,22 @@ export class SyncEngine {
 	 *
 	 * 命中后再从目标的 frontmatter 拿 targets[0].url;没有 binding / URL 空都返回 null,降级纯文本。
 	 */
+	/**
+	 * @[[Name]] mention 解析(issue #3 Phase 1):目标笔记 frontmatter 的 confluence_username。
+	 * 有意不做 Confluence API 搜人 —— 同步是定时/批量后台任务,中途发网络请求或弹交互框
+	 * 都会拖垮批量流程;用户在人员笔记里维护一次 confluence_username 即可长期复用。
+	 */
+	private makeMentionResolver(): (linkpath: string, sourcePath: string) => string | null {
+		const { app } = this.deps;
+		return (linkpath, sourcePath) => {
+			const target = app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+			if (!target) return null;
+			const fm = app.metadataCache.getFileCache(target)?.frontmatter as Record<string, unknown> | undefined;
+			const username = fm?.['confluence_username'];
+			return typeof username === 'string' && username.trim().length > 0 ? username.trim() : null;
+		};
+	}
+
 	private makeWikilinkResolver(): (linkpath: string, sourcePath: string) => string | null {
 		const { app, settings } = this.deps;
 		const findTarget = (linkpath: string, sourcePath: string): TFile | null => {

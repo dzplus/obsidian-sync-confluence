@@ -59,6 +59,12 @@ export const en = {
 		syncFolder: 'Sync to Confluence (entire folder)',
 	},
 
+	// ===== Properties-panel row actions =====
+	propertyActions: {
+		sync: 'Sync to Confluence',
+		open: 'Open in Confluence',
+	},
+
 	// ===== Status bar =====
 	status: {
 		idle: '☁ Idle',

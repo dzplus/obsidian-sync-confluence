@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### English
+
+#### Added
+
+- **[issue #2] Property-row action buttons.** When a note has a `confluence_url` property, two icons appear next to the property key in the properties panel: *Sync to Confluence* and *Open in Confluence* (multi-target bindings pop a picker menu). Implemented with the Share-Note-style `MutationObserver` injection pattern. Deliberately no one-click "unbind" button — destructive actions don't belong one click away in the properties panel.
+- **[issue #3] User mentions via `@[[Name]]` (Server / DC only).** The plugin resolves the linked note and reads `confluence_username` from its frontmatter; present → the mention becomes a real `<ac:link><ri:user>` user link (Confluence normalizes it to `ri:userkey` server-side), absent → degrades to plain `@Name` text. Mentions inside code blocks stay literal. No Confluence user-API lookups during sync by design — scheduled/batch syncs must not block on network searches or interactive pickers. Cloud (`ri:account-id`) not supported yet.
+
+### 中文
+
+#### 新增
+
+- **[issue #2] 属性行操作按钮**:笔记有 `confluence_url` 属性时,属性面板该行旁注入两个图标——*同步到 Confluence* 和 *在 Confluence 中打开*(多目标绑定弹菜单选择)。采用 Share Note 同款 `MutationObserver` 注入模式。有意不做一键"解绑":破坏性操作不该在属性面板一击可达。
+- **[issue #3] `@[[Name]]` 用户 mention(仅 Server / DC)**:插件解析被链接的笔记并读取其 frontmatter 的 `confluence_username`;有值 → 替换为真实的 `<ac:link><ri:user>` 用户链接(Confluence 服务端会归一为 `ri:userkey`),无值 → 降级为纯文本 `@Name`。代码块内的 mention 原样保留。同步过程设计上不调用 Confluence 用户搜索 API——定时/批量同步不能被网络查询或交互弹窗阻塞。Cloud(`ri:account-id`)暂不支持。
+
+---
+
 ## [0.3.4] — 2026-07-03
 
 > **Upgrade note / 升级提示** — `confluence_attachments` 的存储形态从平铺 (`filename → record`) 改为嵌套 (`pageId → filename → record`) 以支持多目标。读取时自动迁移老形态,数据不会丢;但**升级后首次同步会在 frontmatter 里多一层缩进**,YAML diff 一次性出现属正常。 / The `confluence_attachments` shape changed from flat to nested (`pageId → filename → record`) to support multi-target. The reader auto-migrates the old shape on first read — no data loss — but expect a one-time YAML diff on your first sync after upgrading.
