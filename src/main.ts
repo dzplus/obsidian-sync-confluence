@@ -19,7 +19,7 @@ import { SyncEngine } from './sync/syncEngine';
 import { Logger } from './utils/logger';
 import { StatusBarManager } from './ui/statusBar';
 import { CreateBoundNoteModal } from './ui/createBoundNoteModal';
-import { insertTemplateFrontmatter, type Frontmatter } from './frontmatter/handler';
+import { frontmatterHasBinding, insertTemplateFrontmatter, type Frontmatter } from './frontmatter/handler';
 import { SyncStatus } from './types';
 import { t } from './i18n';
 
@@ -336,35 +336,35 @@ export default class SyncConfluencePlugin extends Plugin {
 				return true;
 			},
 		});
-		this.addCommand({
-			id: 'insert-template',
-			name: t('command.insertTemplate'),
-			editorCallback: async (_editor: Editor, view: MarkdownView) => {
-				if (!view.file) { new Notice(t('notice.noteNotOpen')); return; }
-				const ok = await insertTemplateFrontmatter(this.app, view.file);
-				new Notice(ok ? t('notice.frontmatterInsertedShort') : t('notice.frontmatterAlreadyExists'));
-			},
-		});
-		this.addCommand({
-			id: 'create-bound-note',
-			name: t('command.createBoundNote'),
-			callback: () => {
-				const modal = new CreateBoundNoteModal(this.app, this.settings.scanFolders[0] ?? '', async (path, url) => {
-					await this.ensureFolder(parentOf(path));
-					const file = await this.app.vault.create(path, buildTemplateContent());
-					await insertTemplateFrontmatter(this.app, file, url);
-					await this.app.workspace.openLinkText(file.path, '', false);
-					return file;
-				});
-				modal.open();
-			},
-		});
-		this.addCommand({
-			id: 'export-storage-preview',
-			name: t('command.exportStoragePreview'),
-			checkCallback: (checking) => {
-				const file = this.app.workspace.getActiveFile();
-				if (!file) return false;
+			this.addCommand({
+				id: 'insert-template',
+				name: t('command.insertTemplate'),
+				editorCallback: async (_editor: Editor, view: MarkdownView) => {
+					if (!view.file) { new Notice(t('notice.noteNotOpen')); return; }
+					const ok = await insertTemplateFrontmatter(this.app, view.file, '', this.settings.frontmatterKey);
+					new Notice(ok ? t('notice.frontmatterInsertedShort') : t('notice.frontmatterAlreadyExists'));
+				},
+			});
+			this.addCommand({
+				id: 'create-bound-note',
+				name: t('command.createBoundNote'),
+				callback: () => {
+					const modal = new CreateBoundNoteModal(this.app, this.settings.scanFolders[0] ?? '', async (path, url) => {
+						await this.ensureFolder(parentOf(path));
+						const file = await this.app.vault.create(path, buildTemplateContent());
+						await insertTemplateFrontmatter(this.app, file, url, this.settings.frontmatterKey);
+						await this.app.workspace.openLinkText(file.path, '', false);
+						return file;
+					});
+					modal.open();
+				},
+			});
+			this.addCommand({
+				id: 'export-storage-preview',
+				name: t('command.exportStoragePreview'),
+				checkCallback: (checking) => {
+					const file = this.app.workspace.getActiveFile();
+					if (!file) return false;
 				if (!checking) void this.exportStoragePreview(file);
 				return true;
 			},
@@ -408,7 +408,7 @@ export default class SyncConfluencePlugin extends Plugin {
 					.setTitle(t('menu.insertFrontmatter'))
 					.setIcon('cloud')
 					.onClick(async () => {
-						const ok = await insertTemplateFrontmatter(this.app, file);
+							const ok = await insertTemplateFrontmatter(this.app, file, '', this.settings.frontmatterKey);
 						new Notice(ok ? t('notice.frontmatterInserted') : t('notice.frontmatterAlreadyExists'));
 					}));
 			}
@@ -436,7 +436,7 @@ export default class SyncConfluencePlugin extends Plugin {
 					.setTitle(t('menu.insertFrontmatter'))
 					.setIcon('cloud')
 					.onClick(async () => {
-						const ok = await insertTemplateFrontmatter(this.app, file);
+							const ok = await insertTemplateFrontmatter(this.app, file, '', this.settings.frontmatterKey);
 						new Notice(ok ? t('notice.frontmatterInsertedFileMenu') : t('notice.frontmatterAlreadyExists'));
 					}));
 			}
@@ -451,10 +451,11 @@ export default class SyncConfluencePlugin extends Plugin {
 		try {
 			const converter = new MarkdownConverter(this.app);
 			const markdown = await this.app.vault.cachedRead(file);
-			const refs = await converter.extractReferences(markdown, file.path);
+			const mermaidExt: 'svg' | 'png' = this.settings.mermaidRenderer === 'obsidian' ? 'svg' : 'png';
+			const refs = await converter.extractReferences(markdown, file.path, { mermaidExt });
 			const xhtml = await converter.convert(markdown, file.path, {
 				attachedFilenames: new Set(refs.attachments.map((r) => r.filename)),
-				mermaidFilenameByHash: new Map(refs.mermaid.map((b) => [b.hash, b.filename.replace(/\.png$/i, '.svg')])),
+				mermaidFilenameByHash: new Map(refs.mermaid.map((b) => [b.hash, b.filename])),
 				plantUmlFilenameByHash: new Map(refs.plantUml.map((b) => [b.hash, b.filename])),
 				renderMermaidToPng: this.settings.renderMermaidToPng,
 				renderPlantUmlToPng: this.settings.renderPlantUmlToPng,
@@ -506,11 +507,7 @@ export default class SyncConfluencePlugin extends Plugin {
 	private fileIsBound(file: TFile): boolean {
 		const fm = this.app.metadataCache.getFileCache(file)?.frontmatter as Frontmatter | undefined;
 		if (!fm) return false;
-		const url = fm[this.settings.frontmatterKey];
-		const parent = fm['confluence_parent_url'];
-		const hasUrl = typeof url === 'string' && url.trim().length > 0;
-		const hasParent = typeof parent === 'string' && parent.trim().length > 0;
-		return hasUrl || hasParent;
+		return frontmatterHasBinding(fm, this.settings.frontmatterKey);
 	}
 }
 

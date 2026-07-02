@@ -41,6 +41,8 @@ export interface SyncConfluenceSettings {
 
 	// ========== 图表渲染 ==========
 	renderMermaidToPng: boolean;
+	/** kroki=走外部 HTTP 服务转 PNG;obsidian=用 Obsidian 内置 mermaid 引擎转 SVG */
+	mermaidRenderer: 'kroki' | 'obsidian';
 	mermaidRenderUrl: string;
 	renderPlantUmlToPng: boolean;
 	plantUmlServerUrl: string;
@@ -71,6 +73,7 @@ export const DEFAULT_SETTINGS: SyncConfluenceSettings = {
 	maxAttachmentSizeMB: 10,
 
 	renderMermaidToPng: true,
+	mermaidRenderer: 'kroki',
 	mermaidRenderUrl: 'https://kroki.io/mermaid/png',
 	renderPlantUmlToPng: false,
 	plantUmlServerUrl: 'https://www.plantuml.com/plantuml',
@@ -259,19 +262,47 @@ export class SyncConfluenceSettingTab extends PluginSettingTab {
 					s.renderMermaidToPng = v;
 					await this.plugin.saveSettings();
 					this.plugin.rebuildSyncEngine();
+					this.display();
 				}));
 
-			new Setting(el)
-				.setName(t('settings.mermaid.urlName'))
-				.setDesc(t('settings.mermaid.urlDesc'))
-				.addText((tx) => tx
-					.setPlaceholder('https://kroki.io/mermaid/png')
-					.setValue(s.mermaidRenderUrl)
-					.onChange(async (v) => {
-						s.mermaidRenderUrl = v.trim() || DEFAULT_SETTINGS.mermaidRenderUrl;
-						await this.plugin.saveSettings();
-						this.plugin.rebuildSyncEngine();
-					}));
+			if (s.renderMermaidToPng) {
+				new Setting(el)
+					.setName(t('settings.mermaid.rendererName'))
+					.setDesc(t('settings.mermaid.rendererDesc'))
+					.addDropdown((d) => d
+						.addOption('kroki', t('settings.mermaid.rendererKroki'))
+						.addOption('obsidian', t('settings.mermaid.rendererObsidian'))
+						.setValue(s.mermaidRenderer)
+						.onChange(async (v) => {
+							s.mermaidRenderer = (v === 'obsidian' ? 'obsidian' : 'kroki');
+							await this.plugin.saveSettings();
+							this.plugin.rebuildSyncEngine();
+							this.display();
+						}));
+
+				const rendererHint = el.createEl('div', { cls: 'sync-confluence-renderer-hint setting-item-description' });
+				if (s.mermaidRenderer === 'kroki') {
+					rendererHint.createEl('p', { text: t('settings.mermaid.krokiPros') });
+					rendererHint.createEl('p', { text: t('settings.mermaid.krokiCons') });
+				} else {
+					rendererHint.createEl('p', { text: t('settings.mermaid.obsidianPros') });
+					rendererHint.createEl('p', { text: t('settings.mermaid.obsidianCons') });
+				}
+
+				if (s.mermaidRenderer === 'kroki') {
+					new Setting(el)
+						.setName(t('settings.mermaid.urlName'))
+						.setDesc(t('settings.mermaid.urlDesc'))
+						.addText((tx) => tx
+							.setPlaceholder('https://kroki.io/mermaid/png')
+							.setValue(s.mermaidRenderUrl)
+							.onChange(async (v) => {
+								s.mermaidRenderUrl = v.trim() || DEFAULT_SETTINGS.mermaidRenderUrl;
+								await this.plugin.saveSettings();
+								this.plugin.rebuildSyncEngine();
+							}));
+				}
+			}
 
 			new Setting(el)
 				.setName(t('settings.plantuml.toggleName'))

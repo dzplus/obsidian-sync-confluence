@@ -1,0 +1,2 @@
+# e2e fixture 的 §26 依赖字面 CRLF 字节做回归测试,禁止行尾归一
+tests/e2e/fixtures/mermaid-coverage.md -text

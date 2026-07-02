@@ -17,3 +17,6 @@ dist/
 
 # bun
 bun.lockb
+
+# 本地内部草案 / 未实施设计 / 思考备忘(不进仓库)
+.internal/

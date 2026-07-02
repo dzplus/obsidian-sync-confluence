@@ -30,7 +30,7 @@
 - **Content-hash skip** — unchanged notes are not re-pushed; bandwidth and audit log stay clean.
 - **Local attachments auto-upload** — `![[image.png]]` embeds become Confluence attachments.
 - **Auto-create child pages** — set `confluence_parent_url` and the first sync creates the page, then writes the URL back.
-- **Mermaid / PlantUML pre-render** — diagrams are rendered to PNG so they show up even without macros on the Confluence side.
+- **Mermaid / PlantUML pre-render** — diagrams are rendered to an image attachment before sync. Mermaid offers two engines: a kroki HTTP service (PNG, max compatibility) or the in-process Obsidian engine (SVG, pixel-identical to your preview).
 - **Many triggers** — ribbon icon, command palette, editor / file-tree right-click, scheduled timer.
 - **Bilingual UI** — automatically follows Obsidian's language (English / 简体中文).
 
@@ -123,21 +123,56 @@ confluence_url:
 
 On the first sync the plugin creates the child page (titled after the note's filename) and writes the new URL back into `confluence_url`. Subsequent syncs hit that URL directly.
 
+**Multi-parent example — create or update copies under multiple parents**
+
+```yaml
+---
+confluence_parent_url:
+  - https://xxx.atlassian.net/wiki/spaces/DOC/pages/100/Parent-A
+  - https://xxx.atlassian.net/wiki/spaces/DOC/pages/200/Parent-B
+confluence_url:
+  - https://xxx.atlassian.net/wiki/spaces/DOC/pages/12345/My-Page
+  - ""
+confluence_page_id:
+  - "12345"
+  - ""
+---
+```
+
+**CSV-format multi-parent example**
+
+```yaml
+---
+confluence_parent_url: https://xxx.atlassian.net/wiki/spaces/DOC/pages/100/Parent-A, https://xxx.atlassian.net/wiki/spaces/DOC/pages/200/Parent-B
+confluence_url: https://xxx.atlassian.net/wiki/spaces/DOC/pages/12345/My-Page, ""
+confluence_page_id: 12345, ""
+---
+```
+
 **Fields written back by the plugin** — leave these blank, they're maintained automatically:
 
 - `confluence_page_id` — resolved page ID.
 - `confluence_last_synced` — ISO timestamp of the last successful push.
 - `confluence_last_hash` — content hash; equal hash = sync is a no-op.
-- `confluence_attachments` — filename → `{hash, id}` cache, used to skip re-uploading unchanged attachments.
+- `confluence_attachments` — page ID → filename → `{hash, id}` cache, used to skip re-uploading unchanged attachments.
 
 ## 🎨 Diagram rendering (optional)
 
-| Source | Plugin behavior | Why |
-|---|---|---|
-| ```mermaid``` block | Off by default; on → POSTs source to `https://kroki.io/mermaid/png`, uploads PNG as attachment. | Confluence Server doesn't render inline SVG; CJK fonts on local SVG→PNG pipelines are flaky. |
-| ```plantuml``` block | Off by default; on → renders via a PlantUML server, uploads PNG. | Lets you read diagrams in Confluence without installing a macro. |
+| Source | Plugin behavior |
+|---|---|
+| ```mermaid``` block | On by default. Renders to an image attachment using one of two engines (see below). |
+| ```plantuml``` block | Off by default; on → renders via a PlantUML server, uploads PNG. |
 
-For corporate networks, point **Mermaid render service URL** at a self-hosted [kroki](https://kroki.io) instance.
+### Mermaid engine
+
+Pick one in **Settings → Diagrams → Renderer**:
+
+| Engine | Output | Best for |
+|---|---|---|
+| **Kroki remote service** (default) | PNG via `https://kroki.io/mermaid/png` (or self-hosted) | Maximum compatibility — works on every Confluence version, full CJK / emoji font coverage. Trade-off: time-axis diagrams (gantt / timeline) render at a cramped width and date labels overlap. |
+| **Obsidian built-in engine** | SVG rendered locally with Obsidian's mermaid runtime | Pixel-identical to your editor preview, no network needed, time-axis diagrams scale to content width. Trade-off: SVG output — older Confluence Server (≤5.x) may not render it inline; fonts follow your Obsidian theme. |
+
+For corporate networks using kroki, point **Kroki service URL** at a self-hosted [kroki](https://kroki.io) instance (a single `docker run` will do).
 
 ## ⌨️ Commands & menus
 
@@ -161,7 +196,9 @@ Right-click menus:
 
 **`XSRF` rejection on Server** — The plugin already routes around this by using Node `https` for POST + JSON / multipart uploads. If you still hit it, your reverse proxy may be stripping headers; check `X-Atlassian-Token: no-check`.
 
-**Mermaid block shows source instead of image** — turn on **Mermaid → PNG** in settings; the default endpoint is the public `kroki.io`. Inside a corporate network, run your own kroki container and point the URL at it.
+**Mermaid block shows source instead of image** — turn on **Render Mermaid diagrams** in settings. The default engine (kroki) needs network access to `kroki.io`; on a corporate network either self-host kroki or switch the engine to **Obsidian built-in (SVG)**, which renders locally.
+
+**Gantt / timeline dates overlap on Confluence** — kroki renders these at a fixed narrow width so the date axis labels collide. Switch the engine to **Obsidian built-in (SVG)** to let the chart scale to content width.
 
 **Cannot find secret vault** — requires Obsidian 1.11.4+. On older versions the plugin falls back to a plaintext field; upgrade Obsidian to use the encrypted vault.
 
@@ -211,7 +248,7 @@ The `release.yml` workflow builds and attaches the three required files to a Git
 - **内容哈希去重** —— 没改的笔记不重复推送，省带宽也省审计噪声。
 - **本地附件自动上传** —— 笔记里 `![[image.png]]` 形式引用的本地图片自动上传为 Confluence 附件。
 - **自动建子页面** —— 设 `confluence_parent_url`，首次同步时插件自动建子页面并把新 URL 回写到 `confluence_url`。
-- **Mermaid / PlantUML 预渲染** —— 渲成 PNG 上传，Confluence 端不装宏也能看图。
+- **Mermaid / PlantUML 预渲染** —— 同步前渲染成图片附件，Confluence 端不装宏也能看图。Mermaid 支持两种引擎：kroki 远端服务（PNG，兼容性最好）或 Obsidian 内置引擎（SVG，跟笔记预览像素级一致）。
 - **多种触发方式** —— Ribbon、命令面板、编辑器 / 文件树右键、定时器。
 - **中英双语 UI** —— 跟随 Obsidian 语言自动切换。
 
@@ -304,21 +341,56 @@ confluence_url:
 
 首次同步时插件以本笔记文件名为标题创建子页面，并把新页面 URL 回写到 `confluence_url`。之后同步直接走这个 URL。
 
+**多父页面示例 —— 同一篇笔记同步到多个父页面下的副本**
+
+```yaml
+---
+confluence_parent_url:
+  - https://xxx.atlassian.net/wiki/spaces/DOC/pages/100/Parent-A
+  - https://xxx.atlassian.net/wiki/spaces/DOC/pages/200/Parent-B
+confluence_url:
+  - https://xxx.atlassian.net/wiki/spaces/DOC/pages/12345/My-Page
+  - ""
+confluence_page_id:
+  - "12345"
+  - ""
+---
+```
+
+**CSV 格式多父页面示例**
+
+```yaml
+---
+confluence_parent_url: https://xxx.atlassian.net/wiki/spaces/DOC/pages/100/Parent-A, https://xxx.atlassian.net/wiki/spaces/DOC/pages/200/Parent-B
+confluence_url: https://xxx.atlassian.net/wiki/spaces/DOC/pages/12345/My-Page, ""
+confluence_page_id: 12345, ""
+---
+```
+
 **插件自动回写的字段** —— 你不用填，留空即可：
 
 - `confluence_page_id` —— 解析出的 Page ID。
 - `confluence_last_synced` —— 上次成功推送的 ISO 时间戳。
 - `confluence_last_hash` —— 内容哈希；哈希一致就跳过本次同步。
-- `confluence_attachments` —— 文件名 → `{hash, id}` 附件缓存，用于跳过未变附件。
+- `confluence_attachments` —— Page ID → 文件名 → `{hash, id}` 附件缓存，用于跳过未变附件。
 
 ### 🎨 图表渲染（可选）
 
-| 源 | 插件行为 | 为什么 |
-|---|---|---|
-| ```mermaid``` 块 | 默认关；开 → POST 源码到 `https://kroki.io/mermaid/png`，下载 PNG 作为附件上传 | Confluence Server 不 inline 渲染 SVG；本地 SVG→PNG 走 puppeteer 缺中文字体支持 |
-| ```plantuml``` 块 | 默认关；开 → 走 PlantUML Server 渲染为 PNG 上传 | Confluence 端不装宏也能看图 |
+| 源 | 插件行为 |
+|---|---|
+| ```mermaid``` 块 | 默认开。同步前渲染成图片附件，用两个引擎之一（见下）。 |
+| ```plantuml``` 块 | 默认关；开 → 走 PlantUML Server 渲染为 PNG 上传。 |
 
-企业内网可把 **Mermaid 渲染服务 URL** 指向自建 [kroki](https://kroki.io) 实例。
+#### Mermaid 引擎
+
+在 **设置 → 图表渲染 → 渲染方式** 二选一：
+
+| 引擎 | 输出 | 适用 |
+|---|---|---|
+| **Kroki 远端服务**（默认） | PNG，走 `https://kroki.io/mermaid/png`（或自建实例） | 兼容性最好——任何 Confluence 版本都能 inline 渲染，中文/emoji 字体齐全。代价：时间轴类图表（gantt / timeline）会被压缩到固定窄宽度，日期标签挤在一起。 |
+| **Obsidian 内置引擎** | SVG，本地用 Obsidian 自带的 mermaid 渲染 | 跟编辑器预览像素级一致、无网络依赖、时间轴图表按内容宽度自然撑开。代价：产物是 SVG，老版本 Confluence Server（≤5.x）可能不 inline 显示；字体跟随你当前主题。 |
+
+走 kroki 的企业内网用户，把 **Kroki 服务 URL** 指向自建 [kroki](https://kroki.io) 实例（一条 `docker run` 即可）。
 
 ### ⌨️ 命令与菜单
 
@@ -342,7 +414,9 @@ confluence_url:
 
 **Server 上 `XSRF` 拒绝** —— 插件已经走 Node `https` 模块绕过 `requestUrl` 的 XSRF 限制了。如果还报，多半是你的反代剥了 header，检查一下 `X-Atlassian-Token: no-check` 透传。
 
-**Mermaid 代码块没渲成图** —— 在设置里把 **Mermaid → PNG** 打开。默认走公共 `kroki.io`；企业内网请自建 kroki 容器后改 URL。
+**Mermaid 代码块没渲成图** —— 在设置里把 **渲染 Mermaid 图表** 打开。默认引擎（kroki）需要联网访问 `kroki.io`；企业内网要么自建 kroki，要么把引擎切到 **Obsidian 内置引擎（SVG）**，本地渲染、不走网络。
+
+**Confluence 上 Gantt / timeline 的日期挤在一起** —— kroki 渲染这类时间轴图表用的画布太窄，日期标签互相重叠。把引擎切到 **Obsidian 内置引擎（SVG）**，让图表按内容宽度自然撑开。
 
 **找不到密钥库** —— 需要 Obsidian 1.11.4+。老版本会回退到明文输入；升级 Obsidian 即可走加密密钥库。
 

@@ -148,10 +148,18 @@ export const zh: Messages = {
 		diagramsIntro:
 			'开启后,对应代码块会在本地或远端渲染为 PNG 并上传到 Confluence;关闭则原样推送代码块,由 Confluence 端 App 渲染或显示为源码。',
 		mermaid: {
-			toggleName: 'Mermaid → PNG',
-			toggleDesc: 'POST mermaid 源码到下方 kroki 服务渲染为 PNG 上传(Confluence Server 不 inline 渲染 SVG,且本地 SVG→PNG 路径无中文字体支持)',
-			urlName: 'Mermaid 渲染服务 URL',
-			urlDesc: '完整 URL,默认 https://kroki.io/mermaid/png(公共实例);企业内网可自建 kroki docker 实例后改这里',
+			toggleName: '渲染 Mermaid 图表',
+			toggleDesc: '开启后,mermaid 代码块在同步前会被渲染为图片附件;关闭则原样推 mermaid 源码,由 Confluence 端 macro 渲染或显示为代码。',
+			rendererName: '渲染方式',
+			rendererDesc: '两种方式各有优劣,按你的 Confluence 版本 / 网络环境选;切换后下次同步会重新生成所有 mermaid 附件。',
+			rendererKroki: 'Kroki 远端服务(PNG)',
+			rendererObsidian: 'Obsidian 内置引擎(SVG)',
+			krokiPros: '✓ 优:字体齐全(含中文 emoji)、对老版 Confluence 兼容性最好、跨设备渲染一致。',
+			krokiCons: '✗ 劣:依赖网络(企业内网需自建 kroki)、时间轴类图表(gantt / timeline)宽度被压窄、日期会挤在一起。',
+			obsidianPros: '✓ 优:跟编辑器预览像素级一致、无网络依赖、mermaid 版本跟 Obsidian 走、时间轴宽度由内容撑开不挤。',
+			obsidianCons: '✗ 劣:产物是 SVG,Confluence Server 5.x 及以下可能不 inline 显示;字体跟随主题,导出图引用本机字体,远端用户看到时会回退到系统默认。',
+			urlName: 'Kroki 服务 URL',
+			urlDesc: '完整 URL,默认 https://kroki.io/mermaid/png(公共实例);企业内网可自建 kroki docker 实例后改这里。把末尾 /png 改成 /svg 可让 kroki 输出 SVG。',
 		},
 		plantuml: {
 			toggleName: 'PlantUML → PNG',
@@ -188,12 +196,12 @@ export const zh: Messages = {
 		},
 	},
 
-	template: {
-		title: '# 标题',
-		usage:
-			'> 两种用法二选一:\n> 1. 已有 Confluence 页面 → 把目标页面 URL 填到 `confluence_url`\n> 2. 还没建页面 → 把父页面 URL 填到 `confluence_parent_url`,首次同步时插件会自动以本笔记文件名为标题创建子页面,并把新页面 URL 回写到 `confluence_url`\n> 其余字段(page_id / last_synced / last_hash)由插件自动维护。',
-		bodyHeading: '## 正文',
-		bodyPlaceholder: '在这里写内容...',
-		syncingPlaceholder: '<p>(同步中...)</p>',
-	},
+		template: {
+			title: '# 标题',
+			usage:
+				'> 两种用法二选一:\n> 1. 已有 Confluence 页面 → 把目标页面 URL 填到 `confluence_url`\n> 2. 还没建页面 → 把父页面 URL 填到 `confluence_parent_url`（支持数组，可同步到多个父页面）,首次同步时插件会自动以本笔记文件名为标题创建子页面,并把新页面 URL 回写到 `confluence_url`\n> 其余字段(page_id / last_synced / last_hash)由插件自动维护。',
+			bodyHeading: '## 正文',
+			bodyPlaceholder: '在这里写内容...',
+			syncingPlaceholder: '<p>(同步中...)</p>',
+		},
 };

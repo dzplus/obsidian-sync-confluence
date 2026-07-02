@@ -1,5 +1,5 @@
 import type { App, TFile } from 'obsidian';
-import type { Frontmatter } from '../frontmatter/handler';
+import { frontmatterHasBinding, type Frontmatter } from '../frontmatter/handler';
 
 export interface ScanOptions {
 	frontmatterKey: string;
@@ -26,15 +26,11 @@ export function scanBoundNotes(app: App, opts: ScanOptions): TFile[] {
 	for (const file of all) {
 		if (scanFolders.length > 0 && !scanFolders.some((f) => file.path === f || file.path.startsWith(f + '/'))) continue;
 		if (ignoreRegexes.some((r) => r.test(file.path))) continue;
-		const fm = app.metadataCache.getFileCache(file)?.frontmatter as Frontmatter | undefined;
-		if (!fm) continue;
-		const url = fm[opts.frontmatterKey];
-		const parentUrl = fm['confluence_parent_url'];
-		const hasUrl = typeof url === 'string' && url.trim().length > 0;
-		const hasParent = typeof parentUrl === 'string' && parentUrl.trim().length > 0;
-		// url 或 parent_url 至少一个有值才同步(parent_url 用于首次自动建子页)
-		if (!hasUrl && !hasParent) continue;
-		out.push(file);
+			const fm = app.metadataCache.getFileCache(file)?.frontmatter as Frontmatter | undefined;
+			if (!fm) continue;
+			// url 或 parent_url 至少一个有值才同步(parent_url 用于首次自动建子页)
+			if (!frontmatterHasBinding(fm, opts.frontmatterKey)) continue;
+			out.push(file);
 	}
 	return out;
 }

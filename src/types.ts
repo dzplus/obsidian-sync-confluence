@@ -26,22 +26,38 @@ export const SyncStatusText: Record<SyncStatus, string> = {
 	get [SyncStatus.Failed]() { return t('status.failed'); },
 } as Record<SyncStatus, string>;
 
-/** 单个笔记的 Confluence 绑定信息(从 frontmatter 读出) */
-export interface NoteBinding {
-	/** confluence_url。空字符串表示尚未创建页面,需要配合 parentUrl 走 createPage 流程 */
-	url: string;
-	pageId: string;
-	/** confluence_parent_url。仅在 url 为空时使用,指定新页面挂哪个父页 */
-	parentUrl?: string;
-	lastSynced?: string;
-	lastHash?: string;
-	/** filename -> { hash, id } 附件缓存,用于跳过重传 */
-	attachments?: Record<string, AttachmentRecord>;
-}
-
 export interface AttachmentRecord {
 	hash: string;
 	id: string;
+}
+
+export interface SyncTarget {
+	/** confluence_url。空字符串表示尚未创建页面,需要配合 parentUrl 走 createPage 流程 */
+	url: string;
+	/** confluence_parent_url。仅在 url 为空时使用,指定新页面挂哪个父页 */
+	parentUrl?: string;
+	/** resolved or created page ID; empty string when not yet created */
+	pageId: string;
+}
+
+export type FrontmatterFieldFormat = 'scalar' | 'csv' | 'array';
+
+export interface NoteBindingFormats {
+	url: FrontmatterFieldFormat;
+	parentUrl: FrontmatterFieldFormat;
+	pageId: FrontmatterFieldFormat;
+}
+
+/** 单个笔记的 Confluence 绑定信息(从 frontmatter 读出) */
+export interface NoteBinding {
+	/** index-aligned Confluence target slots; at least one entry */
+	targets: SyncTarget[];
+	/** in-memory only; used to preserve scalar/csv/array frontmatter style on write */
+	_formats?: NoteBindingFormats;
+	lastSynced?: string;
+	lastHash?: string;
+	/** pageId -> filename -> { hash, id } 附件缓存,用于按页面隔离附件 ID */
+	attachments?: Record<string, Record<string, AttachmentRecord>>;
 }
 
 /** markdown 中提取出的本地附件引用 */
@@ -66,6 +82,13 @@ export interface FileSyncResult {
 	error?: string;
 	uploadedAttachments?: number;
 	skippedAttachments?: number;
+	perTarget?: Array<{
+		parentUrl?: string;
+		pageId: string;
+		url: string;
+		success: boolean;
+		error?: string;
+	}>;
 }
 
 /** 一次 syncAll 的汇总 */

@@ -155,10 +155,18 @@ export const en = {
 		diagramsIntro:
 			'When enabled, matching code blocks are pre-rendered (locally or via a server) and uploaded as PNG attachments. When disabled, the code block is pushed as-is and rendered by a Confluence-side macro (or shown as source).',
 		mermaid: {
-			toggleName: 'Mermaid → PNG',
-			toggleDesc: 'POSTs the Mermaid source to the kroki endpoint below and uploads the returned PNG (Confluence Server does not render inline SVG, and the local SVG→PNG path lacks CJK font support).',
-			urlName: 'Mermaid render service URL',
-			urlDesc: 'Full URL. Default https://kroki.io/mermaid/png (public instance); set this to a self-hosted kroki for corporate networks.',
+			toggleName: 'Render Mermaid diagrams',
+			toggleDesc: 'When enabled, mermaid code blocks are pre-rendered to image attachments before sync. When disabled, the mermaid source is pushed as-is and rendered by a Confluence-side macro (or shown as code).',
+			rendererName: 'Renderer',
+			rendererDesc: 'Both modes have trade-offs; pick by your Confluence version / network. Switching regenerates all mermaid attachments on next sync.',
+			rendererKroki: 'Kroki remote service (PNG)',
+			rendererObsidian: 'Obsidian built-in engine (SVG)',
+			krokiPros: '✓ Pros: Full font coverage (CJK + emoji), best compatibility with older Confluence Server, identical render across devices.',
+			krokiCons: '✗ Cons: Network-dependent (self-host needed on intranet); time-axis diagrams (gantt / timeline) render at a cramped width so date labels overlap.',
+			obsidianPros: '✓ Pros: Pixel-identical to the Obsidian preview, no network needed, mermaid version follows Obsidian, time-axis diagrams scale to content width.',
+			obsidianCons: '✗ Cons: Output is SVG — Confluence Server 5.x and older may not render it inline; fonts follow your current theme, so remote viewers fall back to system defaults.',
+			urlName: 'Kroki service URL',
+			urlDesc: 'Full URL. Default https://kroki.io/mermaid/png (public instance); change to a self-hosted kroki for corporate networks. Change trailing /png to /svg to make kroki return SVG.',
 		},
 		plantuml: {
 			toggleName: 'PlantUML → PNG',
@@ -197,14 +205,14 @@ export const en = {
 	},
 
 	// ===== Note template body (written into <vault>/templates/confluence-note.md) =====
-	template: {
-		title: '# Title',
-		usage:
-			'> Pick one of two flows:\n> 1. Existing Confluence page → put the page URL in `confluence_url`\n> 2. No page yet → put the **parent** page URL in `confluence_parent_url`. On first sync, the plugin will create a child page named after this note, then write the new URL back to `confluence_url`.\n> The other fields (page_id / last_synced / last_hash) are maintained automatically.',
-		bodyHeading: '## Body',
-		bodyPlaceholder: 'Write here…',
-		syncingPlaceholder: '<p>(syncing…)</p>',
-	},
+		template: {
+			title: '# Title',
+			usage:
+				'> Pick one of two flows:\n> 1. Existing Confluence page → put the page URL in `confluence_url`\n> 2. No page yet → put the **parent** page URL in `confluence_parent_url` (supports array for multi-parent sync). On first sync, the plugin will create a child page named after this note, then write the new URL back to `confluence_url`.\n> The other fields (page_id / last_synced / last_hash) are maintained automatically.',
+			bodyHeading: '## Body',
+			bodyPlaceholder: 'Write here…',
+			syncingPlaceholder: '<p>(syncing…)</p>',
+		},
 };
 
 export type Messages = typeof en;

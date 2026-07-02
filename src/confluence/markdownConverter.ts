@@ -30,6 +30,16 @@ export interface ConvertContext {
 	/** 配置开关 */
 	renderMermaidToPng: boolean;
 	renderPlantUmlToPng: boolean;
+	/**
+	 * 把 Obsidian 的 [[wikilink]] 解析成目标 Confluence 页面 URL。
+	 * 返回 null/undefined → 维持原行为(降级为纯文本)。
+	 */
+	resolveWikilink?: (linkpath: string, sourcePath: string) => string | null;
+}
+
+interface PreprocessOptions {
+	resolveWikilink?: (linkpath: string, sourcePath: string) => string | null;
+	sourcePath?: string;
 }
 
 /**
@@ -46,20 +56,27 @@ export interface ConvertContext {
 export class MarkdownConverter {
 	constructor(private app: App) {}
 
-	async extractReferences(markdown: string, sourcePath: string): Promise<ExtractedReferences> {
+	async extractReferences(
+		markdown: string,
+		sourcePath: string,
+		opts?: { mermaidExt?: 'svg' | 'png'; plantUmlExt?: 'svg' | 'png' },
+	): Promise<ExtractedReferences> {
 		const body = stripFrontmatter(markdown);
 		const preprocessed = preprocessObsidianSyntax(body);
 
 		const attachments = this.collectAttachments(preprocessed, sourcePath);
-		const mermaid = await this.collectDiagrams(preprocessed, 'mermaid');
-		const plantUml = await this.collectDiagrams(preprocessed, 'plantuml');
+		const mermaid = await this.collectDiagrams(preprocessed, 'mermaid', opts?.mermaidExt ?? 'png');
+		const plantUml = await this.collectDiagrams(preprocessed, 'plantuml', opts?.plantUmlExt ?? 'png');
 
 		return { attachments, mermaid, plantUml };
 	}
 
-	async convert(markdown: string, _sourcePath: string, ctx: ConvertContext): Promise<string> {
+	async convert(markdown: string, sourcePath: string, ctx: ConvertContext): Promise<string> {
 		const body = stripFrontmatter(markdown);
-		const preprocessed = preprocessObsidianSyntax(body);
+		const preprocessed = preprocessObsidianSyntax(body, {
+			resolveWikilink: ctx.resolveWikilink,
+			sourcePath,
+		});
 
 		// 预计算每个 fence 块的 hash,渲染器同步查表
 		const fenceHashMap = await this.buildFenceHashMap(preprocessed);
@@ -70,9 +87,21 @@ export class MarkdownConverter {
 		return postProcessHtml(html, ctx);
 	}
 
-	/** 计算 markdown 内容(剥 frontmatter 后)的稳定哈希,用于 last_hash 去重 */
-	async computeContentHash(markdown: string): Promise<string> {
-		return sha1Hex(stripFrontmatter(markdown));
+	/**
+	 * 计算 markdown 内容的稳定哈希,用于 last_hash 去重。
+	 * 把 resolver 一并纳入哈希:peer 页面 URL 变化时也会触发重新上传。
+	 */
+	async computeContentHash(
+		markdown: string,
+		sourcePath: string,
+		opts?: { resolveWikilink?: (linkpath: string, sourcePath: string) => string | null },
+	): Promise<string> {
+		const body = stripFrontmatter(markdown);
+		const preprocessed = preprocessObsidianSyntax(body, {
+			resolveWikilink: opts?.resolveWikilink,
+			sourcePath,
+		});
+		return sha1Hex(preprocessed);
 	}
 
 	private collectAttachments(markdown: string, sourcePath: string): AttachmentRef[] {
@@ -118,7 +147,11 @@ export class MarkdownConverter {
 		return refs;
 	}
 
-	private async collectDiagrams(markdown: string, lang: 'mermaid' | 'plantuml'): Promise<DiagramBlock[]> {
+	private async collectDiagrams(
+		markdown: string,
+		lang: 'mermaid' | 'plantuml',
+		ext: 'svg' | 'png',
+	): Promise<DiagramBlock[]> {
 		const blocks = extractFenceBlocks(markdown).filter((b) => b.lang === lang);
 		const seen = new Set<string>();
 		const out: DiagramBlock[] = [];
@@ -126,7 +159,7 @@ export class MarkdownConverter {
 			const hash = await sha1Hex(b.content);
 			if (seen.has(hash)) continue;
 			seen.add(hash);
-			out.push({ hash, source: b.content, filename: `${lang}-${hash}.png` });
+			out.push({ hash, source: b.content, filename: `${lang}-${hash}.${ext}` });
 		}
 		return out;
 	}
@@ -151,7 +184,9 @@ export class MarkdownConverter {
 		// fence: 代码块 + 图表
 		md.renderer.rules.fence = (tokens, idx) => {
 			const token = tokens[idx]!;
-			const lang = (token.info || '').trim().toLowerCase();
+			// `token.info` 整段可能是 `plantuml id=foo` 这类带 attribute 的形式,
+			// 跟 extractFenceBlocks / markdown-it 标准对齐:只取第一个 token 当 lang。
+			const lang = (token.info || '').trim().split(/\s+/)[0]!.toLowerCase();
 			// markdown-it fence token 的 content 末尾会带 \n,
 			// 而我们 extractFenceBlocks 输出不含,统一 normalize 后再查 map。
 			const content = token.content.replace(/\n+$/, '');
@@ -237,7 +272,7 @@ function stripFrontmatter(md: string): string {
  * - callout `> [!type] Title\n> body` 在第一行替换为 `> **TYPE: Title**\n> body`,
  *   随后 blockquote_open 渲染器根据这个特征转 ac:structured-macro
  */
-function preprocessObsidianSyntax(md: string): string {
+function preprocessObsidianSyntax(md: string, opts?: PreprocessOptions): string {
 	// 先把代码区(fenced + inline)替换成占位符,避免代码示例里的 ![[...]] / [[...]] 被改写
 	const { masked, restore } = maskCodeRegions(md);
 	let s = masked;
@@ -245,21 +280,57 @@ function preprocessObsidianSyntax(md: string): string {
 	// 1. ![[...]] embed → ![alt](path)
 	//    - `[^|\\]+` + `\\?\|` 兼容 markdown 表格内 escaped pipe(`\|`)
 	//    - 带 `#section` / `#^block` 的是笔记片段嵌入,不是图片附件,降级为纯文本
+	//    - 路径用 encodeURI:Obsidian 的 "Pasted image YYYYMMDDHHMMSS.png" 之类含空格,
+	//      不编码会导致 markdown-it 把 `![alt](path with space)` 解析失败,原文吐回。
 	s = s.replace(/!\[\[([^\]\n|\\]+)(?:\\?\|([^\]\n]*))?\]\]/g, (_full, link: string, alias: string) => {
 		const text = (alias ?? '').trim();
 		const linkpath = link.trim();
 		if (linkpath.includes('#')) {
 			return text || linkpath.split('/').pop() || linkpath;
 		}
-		return `![${text}](${linkpath})`;
+		return `![${text}](${encodeURI(linkpath)})`;
 	});
 
-	// 2. [[link|alias]] / [[link]] → alias(纯文本)
+	// 2. [[link|alias]] / [[link]] → 解析为 CF 链接;解析不到时降级为纯文本
 	s = s.replace(/\[\[([^\]\n|\\]+)(?:\\?\|([^\]\n]*))?\]\]/g, (_full, link: string, alias: string) => {
 		const cleanLink = link.trim();
 		const text = (alias ?? '').trim() || cleanLink.split('/').pop() || cleanLink;
+		const resolver = opts?.resolveWikilink;
+		const sourcePath = opts?.sourcePath;
+		if (resolver && sourcePath) {
+			// CF 不支持锚点跳转;`note#section` 把锚点剥掉,只链页面
+			const linkpath = cleanLink.split('#')[0]!.trim();
+			if (linkpath) {
+				const url = resolver(linkpath, sourcePath);
+				if (url) return `[${escapeMarkdownLinkText(text)}](${url})`;
+			}
+		}
 		return text;
 	});
+
+	// 2b. 标准 markdown 链接 [text](relative.md[#anchor]) → 解析为 CF 链接;解析不到降级纯文本。
+	//     `(?<!!)` 排除 ![image](...);排除 http(s)/mailto/tel/锚点 等绝对/特殊形式。
+	const resolver = opts?.resolveWikilink;
+	const sourcePath = opts?.sourcePath;
+	if (resolver && sourcePath) {
+		s = s.replace(
+			/(?<!!)\[([^\]\n]+)\]\((?!https?:|mailto:|tel:|#)([^)\s]+\.md(?:#[^)\s]*)?)\)/g,
+			(_full, text: string, href: string) => {
+				const pathPart = href.split('#')[0]!;
+				let linkpath: string;
+				try {
+					linkpath = decodeURIComponent(pathPart);
+				} catch {
+					linkpath = pathPart;
+				}
+				if (!linkpath) return text;
+				const url = resolver(linkpath, sourcePath);
+				if (url) return `[${escapeMarkdownLinkText(text)}](${url})`;
+				// 解析不到:降级纯文本,避免 CF 把相对 .md 路径渲染成无效链接
+				return text;
+			},
+		);
+	}
 
 	// 3. callout 头部:`> [!info] Title` → 私有区字符包裹的标记 `> CALLOUT:INFO Title`
 	//    用 PUA(U+E000/U+E001)而不是 `__CALLOUT_X__`,避免被 markdown-it 当成 strong(`__bold__`)消化掉前后下划线
@@ -268,6 +339,11 @@ function preprocessObsidianSyntax(md: string): string {
 	});
 
 	return restore(s);
+}
+
+/** markdown inline link 文本中的 `]` 与反斜杠需要转义,避免破坏 `[text](url)` 结构 */
+function escapeMarkdownLinkText(text: string): string {
+	return text.replace(/\\/g, '\\\\').replace(/\]/g, '\\]');
 }
 
 const CODE_MASK_OPEN = '';
@@ -309,25 +385,41 @@ interface FenceBlock { lang: string; content: string; }
 /** 从原始 markdown 中提取所有 ``` fence 块。简化实现,与 markdown-it 规则可能略有偏差但够用 */
 function extractFenceBlocks(markdown: string): FenceBlock[] {
 	const out: FenceBlock[] = [];
-	const lines = markdown.split('\n');
+	// markdown-it 入口会把 \r\n / \r 归一成 \n(NEWLINES_RE),这里必须做同样的归一,
+	// 否则 CRLF 笔记的 fence content 带着 \r,hash 与渲染侧 token.content 永远对不上。
+	const lines = markdown.replace(/\r\n?/g, '\n').split('\n');
 	let i = 0;
 	while (i < lines.length) {
 		const line = lines[i]!;
-		const m = line.match(/^(\s*)(`{3,}|~{3,})\s*([\w-]*)\s*$/);
+		// 容器前缀:连续的空格 / tab / `>`(blockquote 标记),fence 行允许 list / blockquote 缩进。
+		// lang 段:第一个 token(`[\w-]+`)即可,后面可以带 info 字符串(attribute / metadata)。
+		const m = line.match(/^([\s>]*)(`{3,}|~{3,})\s*([\w-]+)?(?:\s.*?)?\s*$/);
 		if (!m) { i += 1; continue; }
-		const indent = m[1]!.length;
+		const containerPrefix = m[1]!;
+		const indent = containerPrefix.length;
 		const fence = m[2]!;
 		const lang = (m[3] ?? '').toLowerCase();
 		const start = i + 1;
 		i = start;
 		while (i < lines.length) {
-			const closing = lines[i]!.match(/^(\s*)(`{3,}|~{3,})\s*$/);
-			if (closing && closing[2]!.startsWith(fence[0]!) && closing[2]!.length >= fence.length && closing[1]!.length === indent) {
+			const closing = lines[i]!.match(/^([\s>]*)(`{3,}|~{3,})\s*$/);
+			if (closing && closing[2]!.startsWith(fence[0]!) && closing[2]!.length >= fence.length) {
+				// 关闭 fence 的容器前缀长度应跟开头一致(或被 markdown-it 视为 lazy continuation,这里宽松些)
 				break;
 			}
 			i += 1;
 		}
-		const content = lines.slice(start, i).join('\n');
+		// 按 CommonMark / markdown-it 规则,fence 体内每行的容器前缀(`>`/缩进)按开头剥掉,
+		// 这样 extractFenceBlocks 的 content 与 markdown-it 的 token.content 一致,fence hash 才能命中。
+		// 涵盖:list-indent(空格)、tab-indent、blockquote(`> `)、嵌套混合。
+		const stripped = indent > 0
+			? lines.slice(start, i).map((l) => {
+				const lm = l.match(/^([\s>]*)/);
+				const lineLen = lm?.[1]?.length ?? 0;
+				return l.slice(Math.min(indent, lineLen));
+			})
+			: lines.slice(start, i);
+		const content = stripped.join('\n');
 		out.push({ lang, content });
 		i += 1;
 	}
