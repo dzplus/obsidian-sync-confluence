@@ -120,11 +120,17 @@ Sync Confluence 插件样式
 }
 
 /* properties 面板 confluence_url 行内操作按钮 (issue #2) */
+.metadata-property-value:has(.sync-confluence-prop-actions) {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .sync-confluence-prop-actions {
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    margin-left: 4px;
+    margin-left: auto;
 }
 
 .sync-confluence-prop-btn {

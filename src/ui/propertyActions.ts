@@ -1,6 +1,5 @@
-import { Menu, TFile, setIcon } from 'obsidian';
+import { setIcon } from 'obsidian';
 import type SyncConfluencePlugin from '../main';
-import { readBindingFromCache } from '../frontmatter/handler';
 import { t } from '../i18n';
 
 const ACTIONS_CLS = 'sync-confluence-prop-actions';
@@ -16,7 +15,7 @@ const ACTIONS_CLS = 'sync-confluence-prop-actions';
  */
 export class PropertyActionsManager {
 	private observer: MutationObserver | null = null;
-	private observerTimeout: number | null = null;
+	private injectPending = false;
 
 	constructor(private plugin: SyncConfluencePlugin) {}
 
@@ -32,30 +31,33 @@ export class PropertyActionsManager {
 
 	destroy(): void {
 		this.stopObserver();
-		for (const el of Array.from(document.querySelectorAll(`.${ACTIONS_CLS}`))) el.remove();
+		for (const el of Array.from(activeDocument.querySelectorAll(`.${ACTIONS_CLS}`))) el.remove();
 	}
 
-	/** 立即尝试注入;行还没渲染出来就挂 observer 等它出现(上限 3s,防泄漏) */
+	/** 每次触发都常驻观察 activeView:属性面板进入编辑态时 Obsidian 会重建行内 DOM,需要自动重注入 */
 	private scheduleInject(): void {
 		this.stopObserver();
-		if (this.tryInject()) return;
+		this.tryInject();
 
 		const container = this.activeViewContainer();
 		if (!container) return;
-		this.observer = new MutationObserver(() => {
-			if (this.tryInject()) this.stopObserver();
-		});
+		this.observer = new MutationObserver(() => this.requestInject());
 		this.observer.observe(container, { childList: true, subtree: true });
-		this.observerTimeout = window.setTimeout(() => this.stopObserver(), 3000);
+	}
+
+	/** rAF 合并高频 mutation(编辑时每 keystroke 会 fire) */
+	private requestInject(): void {
+		if (this.injectPending) return;
+		this.injectPending = true;
+		window.requestAnimationFrame(() => {
+			this.injectPending = false;
+			this.tryInject();
+		});
 	}
 
 	private stopObserver(): void {
 		this.observer?.disconnect();
 		this.observer = null;
-		if (this.observerTimeout !== null) {
-			window.clearTimeout(this.observerTimeout);
-			this.observerTimeout = null;
-		}
 	}
 
 	private activeViewContainer(): HTMLElement | null {
@@ -76,18 +78,15 @@ export class PropertyActionsManager {
 		// 重复注入防护:该行已有按钮就不再动
 		if (row.querySelector(`.${ACTIONS_CLS}`)) return true;
 
-		const keyEl = row.querySelector('.metadata-property-key') ?? row;
-		const wrap = document.createElement('span');
+		const valueEl = row.querySelector('.metadata-property-value') ?? row;
+		const wrap = activeDocument.createElement('span');
 		wrap.className = ACTIONS_CLS;
 
 		this.addButton(wrap, 'cloud-upload', t('propertyActions.sync'), () => {
 			void this.plugin.syncFile(file);
 		});
-		this.addButton(wrap, 'external-link', t('propertyActions.open'), (evt) => {
-			this.openBoundPages(file, evt);
-		});
 
-		keyEl.appendChild(wrap);
+		valueEl.appendChild(wrap);
 		return true;
 	}
 
@@ -97,7 +96,7 @@ export class PropertyActionsManager {
 		label: string,
 		onClick: (evt: MouseEvent) => void,
 	): void {
-		const btn = document.createElement('span');
+		const btn = activeDocument.createElement('span');
 		btn.className = 'sync-confluence-prop-btn clickable-icon';
 		btn.setAttribute('aria-label', label);
 		setIcon(btn, icon);
@@ -109,22 +108,4 @@ export class PropertyActionsManager {
 		parent.appendChild(btn);
 	}
 
-	private openBoundPages(file: TFile, evt: MouseEvent): void {
-		const binding = readBindingFromCache(this.plugin.app, file, this.plugin.settings.frontmatterKey);
-		const urls = (binding?.targets ?? []).map((t) => t.url).filter((u) => u.length > 0);
-		if (urls.length === 0) return;
-		if (urls.length === 1) {
-			window.open(urls[0]!);
-			return;
-		}
-		// 多目标:弹菜单让用户挑
-		const menu = new Menu();
-		for (const url of urls) {
-			menu.addItem((item) => item
-				.setTitle(url)
-				.setIcon('external-link')
-				.onClick(() => window.open(url)));
-		}
-		menu.showAtMouseEvent(evt);
-	}
 }

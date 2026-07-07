@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] — 2026-07-07
+
+### English
+
+#### Fixed
+
+- **Property-row action buttons layout.** Icons moved from the property *key* cell to the *value* cell's right edge (`margin-left: auto`). The old placement squeezed long keys like `confluence_url` into `conflue...` and made the icons look orphaned between the key and value. Now the key stays fully readable and the icons sit at the row's right edge, consistent regardless of value length.
+- **Property-row buttons disappearing when cursor enters the note.** Obsidian rebuilds the property row's inner DOM whenever it flips into edit mode, and the old code disconnected its `MutationObserver` after 3 seconds — so the buttons never got re-injected. `MutationObserver` is now persistent (still scoped to the active view) and coalesces high-frequency mutations through `requestAnimationFrame`, so keystrokes in the note body don't churn.
+- **`confluence_url` array corrupted into CSV string on multi-target sync.** When frontmatter had `confluence_url` as a single scalar URL but the engine later needed to write N targets (e.g. after a multi-target parent sync), `serializeValues` fell into the CSV branch and produced `"url1, url2"` as one string — Obsidian then rendered it as a single `<a>` with only one open-icon, breaking multi-URL UX. Fix in `handler.ts`: scalar-format + multiple values now upgrades to a proper YAML list so Obsidian recognizes the field as a URL list and renders each URL as its own pill.
+- **Obsidian store audit findings.** `mermaidRenderer.ts` now uses `setCssStyles` instead of raw `style.cssText`; `propertyActions.ts` uses `activeDocument` instead of `document` for popout-window compatibility.
+
+#### Changed
+
+- **Removed the row-end "open" icon.** Each URL pill already carries Obsidian's built-in `⤴` open button. The row-end `🌐` was redundant; only the `☁️` sync-note icon remains at the row's right edge.
+
+### 中文
+
+#### 修复
+
+- **属性行按钮位置**:按钮从属性 *key* 那格挪到 *value* 那格的右边缘(用 `margin-left: auto` 推到最右)。原来的位置会把 `confluence_url` 挤成 `conflue...`,按钮夹在 key 和 value 之间视觉像孤儿。改后 key 完整可读,按钮固定在行右边缘,不随 value 长度浮动。
+- **光标进入笔记后按钮消失**:Obsidian 属性行进入编辑态会重建行内 DOM,而原来的 `MutationObserver` 挂 3 秒就 disconnect,后续 DOM 重建不再响应。改成 observer 常驻观察 active view + `requestAnimationFrame` 合并高频 mutation,编辑正文时不会因 keystroke 频繁触发 tryInject。
+- **多目标同步时 `confluence_url` 被拼成 CSV 字符串**:frontmatter 里 `confluence_url` 是单值 scalar 时,同步引擎需要写入多个 target(比如多父页同步后)会走进 `serializeValues` 的 CSV 分支,输出 `"url1, url2"` 一坨字符串。Obsidian 属性面板把它识别成单个 URL,只渲染一个 `<a>` + 一个打开图标,多目标 UI 崩坏。修复:`handler.ts` 里 scalar 遇多值升 YAML list,Obsidian 自动识别为 URL 列表,每个 URL 独立 pill。
+- **Obsidian 商店审核发现的问题**:`mermaidRenderer.ts` 改用 `setCssStyles` 而非直接 `style.cssText`;`propertyActions.ts` 改用 `activeDocument` 替代 `document`(popout 窗口兼容)。
+
+#### 变更
+
+- **移除属性行末的"打开"图标**:每个 URL pill 自带 Obsidian 原生的 `⤴` 打开按钮,行末的 `🌐` 完全冗余,已删除;行末只保留 `☁️` 同步整篇笔记的图标。
+
+---
+
+## [0.3.5] — 2026-07-07
+
 ### English
 
 #### Added

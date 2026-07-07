@@ -115,9 +115,16 @@ export class ObsidianMermaidRenderer implements IMermaidRenderer {
 	private async renderOne(source: string): Promise<string> {
 		// 隐藏挂载点。宽度给得宽,让 mermaid useMaxWidth=true 时 SVG 能用足容器宽度,
 		// 算出贴合内容的自然布局(尤其甘特图横轴密度由容器宽决定)。
-		const host = document.createElement('div');
-		host.style.cssText = 'position:absolute;left:-99999px;top:0;width:2000px;visibility:hidden;pointer-events:none';
-		document.body.appendChild(host);
+		const host = activeDocument.createElement('div');
+		host.setCssStyles({
+			position: 'absolute',
+			left: '-99999px',
+			top: '0',
+			width: '2000px',
+			visibility: 'hidden',
+			pointerEvents: 'none',
+		});
+		activeDocument.body.appendChild(host);
 		const comp = new Component();
 		comp.load();
 		try {

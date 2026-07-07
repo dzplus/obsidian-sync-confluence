@@ -159,7 +159,9 @@ function normalizeToArray(v: unknown, kind: 'url' | 'pageId'): { values: string[
 
 function serializeValues(values: string[], format: FrontmatterFieldFormat): string | string[] {
 	if (format === 'array') return values;
-	if (format === 'csv' || values.length > 1) return values.map(escapeCsvSegment).join(', ');
+	if (format === 'csv') return values.map(escapeCsvSegment).join(', ');
+	// scalar 遇多值升 YAML list,让 Obsidian 属性面板识别为 List 类型 → 每个值独立 pill
+	if (values.length > 1) return values;
 	return values[0] ?? '';
 }
 
