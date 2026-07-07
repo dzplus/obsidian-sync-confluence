@@ -1,7 +1,7 @@
 {
 	"id": "sync-confluence",
 	"name": "Sync Confluence",
-	"version": "0.3.4",
+	"version": "0.3.5",
 	"minAppVersion": "1.4.4",
 	"description": "Sync notes to Confluence pages on a schedule, bound by a confluence_url field in frontmatter.",
 	"author": "duanzhang",
