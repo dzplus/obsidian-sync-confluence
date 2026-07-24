@@ -124,6 +124,10 @@ export const en = {
 			fail: 'Authentication failed: {error}',
 			exception: 'Validation error: {error}',
 		},
+		stripSupplementary: {
+			name: 'Legacy server compatibility: replace emoji with [U+XXXX]',
+			desc: 'Only for Confluence Server whose MySQL still uses 3-byte utf8 (sync fails with "Unsupported character found in content"). Replaces emoji and other supplementary characters with [U+XXXX] placeholders. Leave off for Cloud and utf8mb4 servers — emoji sync natively.',
+		},
 		interval: {
 			name: 'Sync interval (minutes)',
 			desc: '0 = disabled (manual only)',

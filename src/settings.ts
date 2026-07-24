@@ -14,6 +14,11 @@ export interface SyncConfluenceSettings {
 	username: string;
 	/** SecretStorage 中保存的密钥名称(不存明文)。basic→密码/API Token,bearer→PAT */
 	apiToken: string;
+	/**
+	 * 老 Confluence Server(MySQL utf8 3-byte)兼容:把 emoji 等增补字符替换为
+	 * [U+XXXX] 占位以避免 400。默认关闭,emoji 原样同步(issue #5)。
+	 */
+	stripSupplementaryChars: boolean;
 
 	// ========== 调度 ==========
 	/** 分钟,0=禁用定时同步 */
@@ -53,6 +58,7 @@ export const DEFAULT_SETTINGS: SyncConfluenceSettings = {
 	authType: 'basic',
 	username: '',
 	apiToken: '',
+	stripSupplementaryChars: false,
 
 	syncInterval: 30,
 	syncOnStartup: false,
@@ -140,6 +146,14 @@ export class SyncConfluenceSettingTab extends PluginSettingTab {
 				}));
 
 			this.authResultEl = el.createDiv({ cls: 'sync-confluence-auth-result' });
+
+			new Setting(el)
+				.setName(t('settings.stripSupplementary.name'))
+				.setDesc(t('settings.stripSupplementary.desc'))
+				.addToggle((tx) => tx.setValue(s.stripSupplementaryChars).onChange(async (v) => {
+					s.stripSupplementaryChars = v;
+					await this.plugin.saveSettings();
+				}));
 		});
 
 		// ===== 同步调度 =====

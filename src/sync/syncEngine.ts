@@ -150,7 +150,11 @@ export class SyncEngine {
 			const markdown = await this.deps.app.vault.cachedRead(file);
 			const resolveWikilink = this.makeWikilinkResolver();
 			const resolveMention = this.makeMentionResolver();
-			const contentHash = await this.converter.computeContentHash(markdown, path, { resolveWikilink, resolveMention });
+			const contentHash = await this.converter.computeContentHash(markdown, path, {
+				resolveWikilink,
+				resolveMention,
+				stripSupplementaryChars: this.deps.settings.stripSupplementaryChars,
+			});
 			const refs = await this.converter.extractReferences(markdown, path, {
 				mermaidExt: this.mermaid?.extension(),
 			});
@@ -174,6 +178,7 @@ export class SyncEngine {
 				plantUmlFilenameByHash,
 				renderMermaidToPng: this.deps.settings.renderMermaidToPng,
 				renderPlantUmlToPng: this.deps.settings.renderPlantUmlToPng,
+				stripSupplementaryChars: this.deps.settings.stripSupplementaryChars,
 				resolveWikilink,
 				resolveMention,
 			};

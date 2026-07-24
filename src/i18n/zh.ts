@@ -116,6 +116,10 @@ export const zh: Messages = {
 			fail: '认证失败: {error}',
 			exception: '验证异常: {error}',
 		},
+		stripSupplementary: {
+			name: '老 Server 兼容:emoji 替换为 [U+XXXX]',
+			desc: '仅当 Confluence Server 的 MySQL 仍是 3 字节 utf8、同步报 "Unsupported character found in content" 时开启。开启后 emoji 等增补字符会替换为 [U+XXXX] 占位。Cloud 与 utf8mb4 服务器请保持关闭,emoji 可原样同步。',
+		},
 		interval: {
 			name: '定时同步间隔(分钟)',
 			desc: '0 = 禁用定时,仅手动触发',
