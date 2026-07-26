@@ -11,6 +11,7 @@
 
 import type { App, TFile } from 'obsidian';
 import type { SyncConfluenceSettings } from './settings';
+import type { PerInstanceUsernameMap } from './types';
 import { scanBoundNotes } from './sync/noteScanner';
 
 /**
@@ -242,6 +243,91 @@ export async function tryMigrateLegacyFile(
 				[instanceId]: { [targetPageId]: { ...flat } },
 			};
 		}
+	});
+	return true;
+}
+
+/**
+ * One-shot frontmatter migration for the `confluence_username` field, which
+ * was a flat string (`confluence_username: john.doe`) in pre-multi-instance
+ * versions and is now a per-instance map keyed by `ConfluenceInstance.id`
+ * (`{ [instanceId]: username }`). Run unconditionally on plugin load — it's
+ * idempotent (already-migrated maps are left alone) and the file scan is
+ * cheap (one vault pass).
+ *
+ * Unlike `migrateLegacyFrontmatter`, this scans the WHOLE vault, not just
+ * bound notes — person notes (the targets of `@[[Name]]` mentions) typically
+ * aren't bound to Confluence themselves, so a bound-only scan would miss
+ * them. Only `confluence_username` is touched; other frontmatter is left
+ * intact.
+ *
+ * Failures are isolated per-file and never crash plugin load.
+ *
+ * Returns the number of notes that were actually rewritten.
+ */
+export async function migrateLegacyUsernames(
+	app: App,
+	settings: SyncConfluenceSettings,
+	logger: MigrationLogger,
+): Promise<number> {
+	// The `?? 'default'` only fires when migrateLegacySettings was a no-op
+	// (no legacy auth data) AND migrateLegacyUsernames still has legacy
+	// usernames to migrate. That requires a hand-edited data.json with
+	// legacy frontmatter but no instances — at which point the user has
+	// bigger problems. We fall back to 'default' so migration still runs.
+	const instanceId = settings.instances[0]?.id ?? 'default';
+	// Whole-vault scan (not just bound notes) so person notes referenced by
+	// `@[[Name]]` are caught regardless of which folder they live in. Exclude
+	// the vault config dir explicitly — `scanBoundNotes` adds the same
+	// exclusion implicitly via its glob allowlist; here we filter directly.
+	const configDir = app.vault.configDir;
+	const allFiles = app.vault.getMarkdownFiles().filter(
+		(f) => !f.path.startsWith(configDir + '/'),
+	);
+	let migrated = 0;
+	for (const file of allFiles) {
+		try {
+			if (await tryMigrateLegacyUsernameFile(app, file, instanceId)) migrated += 1;
+		} catch (e) {
+			logger.warn(`Failed to migrate legacy confluence_username on ${file.path}`, e instanceof Error ? e.message : String(e));
+		}
+	}
+	if (migrated > 0) {
+		logger.info(`Migrated legacy confluence_username on ${migrated} notes`);
+	}
+	return migrated;
+}
+
+/**
+ * Migrate one file's `confluence_username` from a flat string to the
+ * per-instance map. Returns true when the file was rewritten. Idempotent:
+ * files already in the new shape (or absent / empty) are no-ops.
+ *
+ * Exported for direct testing / future bulk-repair tools.
+ */
+export async function tryMigrateLegacyUsernameFile(
+	app: App,
+	file: TFile,
+	instanceId: string,
+): Promise<boolean> {
+	const fm = app.metadataCache.getFileCache(file)?.frontmatter as Record<string, unknown> | undefined;
+	if (!fm) return false;
+	const raw = fm['confluence_username'];
+	if (typeof raw !== 'string') return false;
+	const trimmed = raw.trim();
+	if (!trimmed) return false;
+	await app.fileManager.processFrontMatter(file, (rawFm) => {
+		const fmRaw = rawFm as Record<string, unknown>;
+		// Re-read inside the write transaction: a user editing this person
+		// note's frontmatter in the cache→write window could otherwise have
+		// their sibling key edits clobbered. If the value is no longer a
+		// string (someone already migrated it manually), skip.
+		const current = fmRaw['confluence_username'];
+		if (typeof current !== 'string') return;
+		const trimmedCurrent = current.trim();
+		if (!trimmedCurrent) return;
+		const next: PerInstanceUsernameMap = { [instanceId]: trimmedCurrent };
+		fmRaw['confluence_username'] = next;
 	});
 	return true;
 }

@@ -126,6 +126,8 @@ For every note the plugin looks at every URL across `confluence_url` / `confluen
 
 `Create bound note` shows the instance dropdown only when more than one instance is configured, and validates that the entered URL starts with the chosen instance's base URL.
 
+**Mentions are per-instance too.** `@[[John Doe]]` resolves against `confluence_username.<instanceId>` (see [Links & mentions](#-links--mentions)) — if the same person has different usernames on different instances, list each one under its instance id. A person note without a slice for the current instance degrades to plain `@John Doe` on that instance only.
+
 ## 📝 Frontmatter cheatsheet
 
 **Existing page — bind by URL**
@@ -186,15 +188,18 @@ confluence_page_id: 12345, ""
 
 **Heading anchors.** Same-page `[[#Heading]]` / `[text](#heading)` and cross-page `[[Other Note#Heading]]` / `[text](note.md#heading)` links are converted to native Confluence heading anchors. Heading matching is case-sensitive, following Confluence behavior.
 
-**User mentions (Server / DC only).** Write `@[[John Doe]]` to mention a Confluence user. The plugin looks up the linked note (`John Doe.md`) and reads `confluence_username` from its frontmatter:
+**User mentions (Server / DC only).** Write `@[[John Doe]]` to mention a Confluence user. The plugin looks up the linked note (`John Doe.md`) and reads `confluence_username` from its frontmatter. With multiple instances configured the value is a per-instance map keyed by `ConfluenceInstance.id`; each engine reads only its own slice:
+>>>>>>> c43576a (feat: per-instance identity for @[[Name]] user mentions)
 
 ```yaml
 ---
-confluence_username: john.d
+confluence_username:
+  default: john.d          # ConfluenceInstance.id → Confluence username
+  inst-abc123: j.doe       # another instance may have a different username
 ---
 ```
 
-If the field is present the mention becomes a real Confluence user link (notification + profile link); if the note or field is missing it degrades to plain `@John Doe` text. Mentions inside code blocks are left untouched. The plugin never queries the Confluence user API during sync — maintain the username once per person note and it works offline from then on. Cloud is not supported yet (Cloud storage format requires `ri:account-id`).
+If the entry for the current instance is present the mention becomes a real Confluence user link (notification + profile link); if the note, the field, or the slice for the current instance is missing it degrades to plain `@John Doe` text. Mentions inside code blocks are left untouched. The plugin never queries the Confluence user API during sync — maintain the username once per person note and it works offline from then on. Cloud is not supported yet (Cloud storage format requires `ri:account-id`).
 
 ## 🎨 Diagram rendering (optional)
 
@@ -386,6 +391,8 @@ confluence_url: https://xxx.atlassian.net/wiki/spaces/XXX/pages/12345/Title
 
 只有当配置了多个实例时，`Create bound note` 命令才会显示实例下拉框，并校验输入的 URL 是否以所选实例的 base URL 开头。
 
+**Mention 也是 per-instance。** `@[[张三]]` 会按 `confluence_username.<instanceId>` 解析（见 [链接与 mention](#-链接与-mention)）——同一个人在不同实例上 username 不一样时，每个实例各列一行。没有当前实例对应 slice 的 person note，只在那个实例上降级为 `@张三`。
+
 ### 📝 Frontmatter 速查
 
 **已有页面 —— 用 URL 直接绑**
@@ -446,15 +453,17 @@ confluence_page_id: 12345, ""
 
 **标题锚点。** 同页 `[[#标题]]` / `[文本](#标题)` 和跨页 `[[另一篇笔记#标题]]` / `[文本](note.md#标题)` 会转换为 Confluence 原生标题锚点。标题匹配遵循 Confluence 规则，区分大小写。
 
-**用户 mention（仅 Server / DC）。** 写 `@[[张三]]` 即可 mention Confluence 用户。插件查找被链接的笔记（`张三.md`），读其 frontmatter 的 `confluence_username`：
+**用户 mention（仅 Server / DC）。** 写 `@[[张三]]` 即可 mention Confluence 用户。插件查找被链接的笔记（`张三.md`），读其 frontmatter 的 `confluence_username`。配置多个实例时，值是 per-instance map，键为 `ConfluenceInstance.id`，每个 engine 只读属于自己的 slice：
 
 ```yaml
 ---
-confluence_username: zhangsan
+confluence_username:
+  default: zhangsan           # ConfluenceInstance.id → Confluence username
+  inst-abc123: zhang.s        # 另一个实例可能有不同的 username
 ---
 ```
 
-字段存在 → 变成真实的 Confluence 用户链接（会通知对方、可点进个人页）；笔记或字段缺失 → 降级为纯文本 `@张三`。代码块里的 mention 原样保留。插件同步过程**不会**调 Confluence 用户搜索 API——每人维护一次 username 后离线可用。Cloud 暂不支持（Cloud storage 格式要求 `ri:account-id`）。
+当前实例对应条目存在 → 变成真实的 Confluence 用户链接（会通知对方、可点进个人页）；笔记 / 字段 / 当前实例对应 slice 缺失 → 降级为纯文本 `@张三`。代码块里的 mention 原样保留。插件同步过程**不会**调 Confluence 用户搜索 API——每人维护一次 username 后离线可用。Cloud 暂不支持（Cloud storage 格式要求 `ri:account-id`）。
 
 ### 🎨 图表渲染（可选）
 

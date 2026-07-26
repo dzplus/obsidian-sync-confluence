@@ -24,7 +24,7 @@ import { PropertyActionsManager } from './ui/propertyActions';
 import { CreateBoundNoteModal } from './ui/createBoundNoteModal';
 import { frontmatterHasBinding, insertTemplateFrontmatter, type Frontmatter } from './frontmatter/handler';
 import { extractTargetUrls, extractFirstTargetUrl } from './confluence/urlMatch';
-import { LEGACY_MIGRATION_VERSION, migrateLegacySettings, migrateLegacyFrontmatter } from './migration';
+import { LEGACY_MIGRATION_VERSION, migrateLegacySettings, migrateLegacyFrontmatter, migrateLegacyUsernames } from './migration';
 import {
 	SyncStatus,
 	type ConfluenceInstance,
@@ -132,6 +132,7 @@ export default class SyncConfluencePlugin extends Plugin {
 		if (this.legacyMigrationVersion !== LEGACY_MIGRATION_VERSION) {
 			migrateLegacySettings(this.settings, this.logger);
 			await migrateLegacyFrontmatter(this.app, this.settings, this.logger);
+			await migrateLegacyUsernames(this.app, this.settings, this.logger);
 			this.legacyMigrationVersion = LEGACY_MIGRATION_VERSION;
 			await this.saveSettings();
 		}

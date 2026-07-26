@@ -126,6 +126,14 @@ export interface BatchSyncResult {
 
 // ========== Multi-Confluence Support Types ==========
 
+/**
+ * Per-instance identity map for `@[[Name]]` mentions. With multiple
+ * instances the same person can have different usernames on different
+ * Confluence installations (e.g. SSO vs. legacy domain account), so the
+ * value is keyed by `ConfluenceInstance.id`.
+ */
+export type PerInstanceUsernameMap = Record<string, string>;
+
 /** Configuration for a single Confluence instance. */
 export interface ConfluenceInstance {
 	/** Stable identifier (used for SecretStorage key derivation and UI references). */

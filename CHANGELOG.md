@@ -17,15 +17,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
+- **Multi-instance Confluence support.** Up to 10 Confluence instances per vault. Each instance has its own name / base URL / auth type / account / token, rendered as an independent card in **Settings → Confluence authentication**. Tokens live in Obsidian's SecretStorage (key vault on Obsidian 1.11.4+, plaintext + derived key `sync-confluence-token-<instanceId>` on older builds). The settings top-level fields (`confluenceBaseUrl` / `authType` / `username` / `apiToken`) are gone — only `instances: ConfluenceInstance[]` remains.
+- **Longest-prefix URL routing (`InstanceResolver`).** Every note is scanned across all its `confluence_url` / `confluence_parent_url` targets (scalar / CSV / array); each URL is matched against every configured instance's `baseUrl` with the longest-prefix-wins rule and host-boundary safety. A single file can land in multiple instance groups when its targets span instances. Grouped notes flow into one `SyncEngine` per instance, each filtering its `binding.targets` to the subset whose URL prefix matches its `instanceBaseUrl`. Targets that belong to another instance are marked `foreign: true` and excluded from the engine's failure count, so the hash-skip invariant stays intact when one instance fails. Files whose URLs prefix-match no instance are surfaced as `Unmatched` in the sync summary.
+- **Frontmatter shape change for per-instance dedup state.** `confluence_last_hash` becomes `Record<instanceId, Record<pageId, string>>` (two-level); `confluence_attachments` becomes `Record<instanceId, Record<pageId, Record<filename>, { hash, id }>>>`. The instanceId layer exists because Confluence pageIds are local to a Server/DC installation — two instances can have the same pageId, and a single-level key would let engine A's stamp vouch for engine B's target. Pre-multi-instance flat shapes (`confluence_last_hash: "H"` string, `confluence_attachments: { filename: rec }`) are migrated on plugin load by `migrateLegacyFrontmatter` (one-time; idempotent).
+- **Settings UI:** Add / reorder / remove buttons per instance card, in-place duplicate-name / duplicate-baseUrl warnings, instance dropdown on the `Create bound note` command (shown only when more than one instance is configured, validates the entered URL belongs to the chosen instance).
+- **Debug helpers:** `tests/e2e/scripts/verify-lastHash.ts` and `verify-urlMatch.ts` exercise the per-instance shape and the longest-prefix routing respectively.
 - **Configurable image display width.** Regular local images now sync with a default Confluence display width of 192px, configurable under *Attachments → Default image display width*. Set it to `0` to keep the original size. The source attachment is still uploaded unchanged, and diagram images keep their natural dimensions.
 - **[issue #4 follow-up] Heading anchor links.** Same-page `[[#Heading]]` / `[text](#heading)` and cross-page `[[Note#Heading]]` / `[text](note.md#heading)` links now become native Confluence `ac:link` anchors. Previously the converter deliberately stripped the heading fragment, leaving same-page links as plain text and cross-page links pointing only to the page.
+
+#### Changed
+
+- **`stripSupplementaryChars` moved from top-level setting to per-instance.** Previously a single global flag (default off) controlling whether emoji and supplementary characters are replaced with `[U+XXXX]` placeholders for legacy Confluence Server on 3-byte MySQL utf8 (added upstream in 0.3.7 to fix issue #5). Now lives on `ConfluenceInstance.stripSupplementaryChars` because users with a mixed fleet (legacy Server + Cloud) need different per-server behavior — enable only on the Server card whose MySQL still uses 3-byte utf8, leave off for Cloud and utf8mb4 Server so emoji sync natively. The toggle is per-instance in the settings card, after the Validate button. The salt logic in `computeContentHash` (also from 0.3.7) carries over unchanged.
+- **Legacy migration:** `migrateLegacySettings` (run on the marker mismatch between saved `legacyMigrationVersion` and `LEGACY_MIGRATION_VERSION`) now also reads the legacy top-level `stripSupplementaryChars` field when present and copies the value onto the synthesized "Default" instance, so a user who had the toggle on under 0.3.7 keeps the same behavior on their primary Server after upgrade. Already-migrated instances without legacy fields are left untouched.
+- **`confluence_username` is now a per-instance map.** Pre-multi-instance, person-note frontmatter had `confluence_username: john.doe` (a flat string) — used by the `@[[Name]]` mention resolver to look up the Confluence username for the current instance. With multiple instances the same person can have different usernames on different installations (e.g. SSO vs. legacy domain account), so the value is now keyed by `ConfluenceInstance.id`: `confluence_username: { default: john.doe, inst-abc123: j.doe }`. Each `SyncEngine` reads only its own `instance.id` slice; missing slice → resolver returns null → mention degrades to plain `@Name` on that instance only. A new `migrateLegacyUsernames` runs inside the same gated migration block as `migrateLegacySettings` / `migrateLegacyFrontmatter` (firing once when `legacyMigrationVersion !== LEGACY_MIGRATION_VERSION`) and converts every flat-string `confluence_username` field across the vault to the per-instance map under the first configured instance's id (falling back to the literal `'default'` when no instances exist yet). The migration is idempotent and only rewrites notes still in the legacy string form; already-migrated notes are untouched. Cloud mentions remain unsupported (still requires `ri:account-id`).
 
 ### 中文
 
 #### 新增
 
+- **多实例 Confluence 支持**:单个 vault 最多可配 10 个 Confluence 实例。每个实例独立卡片(在 **设置 → Confluence 认证** 下),含独立的名称 / base URL / 认证方式 / 账号 / token。token 存在 Obsidian 密钥库(密钥库需 Obsidian 1.11.4+,老版本回退到明文 + 派生 key `sync-confluence-token-<instanceId>`)。原设置里的顶层字段(`confluenceBaseUrl` / `authType` / `username` / `apiToken`)全部移除,只留 `instances: ConfluenceInstance[]`。
+- **最长前缀 URL 路由(`InstanceResolver`)**:扫描每个笔记的全部 `confluence_url` / `confluence_parent_url` target(scalar / CSV / 数组),每个 URL 与每个配置的实例 `baseUrl` 做最长前缀匹配(带 host boundary 防护)。一个笔记可落到多个实例组,只要它的 target 跨实例。每组走各自的 `SyncEngine`,engine 只同步 URL 前缀命中自己 `instanceBaseUrl` 的 target。属于别的实例的 target 标 `foreign: true`、不计入本 engine 失败数,以保住 hash-skip 不变(一个实例挂掉时另一个实例的笔记不会被反复重推)。所有 URL 都不命中任何实例时,文件在同步摘要里显示为 `Unmatched`。
+- **Frontmatter 改为 per-instance 去重形态**:`confluence_last_hash` 变成 `Record<instanceId, Record<pageId, string>>`(两层);`confluence_attachments` 变成 `Record<instanceId, Record<pageId, Record<filename>, { hash, id }>>>`。instanceId 这一层必须存在,因为 Confluence pageId 在每个 Server/DC 站点是局部的——两个实例可能 pageId 相同,单层 key 会让 A 实例的戳给 B 实例的目标做了证明。每个 engine 只写自己的 slice delta,`writeBinding` 的原子合并(在 plugin 互斥锁下)保留其他实例的 slice 不动。
+- **设置 UI**:每张实例卡片含 add / reorder / remove、in-place 重名 / 重 URL 警告;`Create bound note` 命令在多于 1 实例时显示实例下拉并校验输入 URL 命中该实例的 base URL。
+- **调试工具**:`tests/e2e/scripts/verify-lastHash.ts` 与 `verify-urlMatch.ts` 分别验证 per-instance 形态与最长前缀路由。
 - **图片显示宽度可配置**:普通本地图片同步到 Confluence 后默认显示为 192px,可在 *附件 → 图片默认显示宽度* 中修改;填 `0` 保持原始大小。上传的源附件不会被压缩,Mermaid / PlantUML 图表仍保持自然尺寸。
 - **[issue #4 补全] 标题锚点链接**:同页 `[[#标题]]` / `[文本](#标题)` 和跨页 `[[笔记#标题]]` / `[文本](note.md#标题)` 现在会生成 Confluence 原生 `ac:link` 锚点。此前转换器会主动剥掉标题片段,导致同页锚点退化为纯文本、跨页链接只能跳到页面顶部。
+
+#### 变更
+
+- **`stripSupplementaryChars` 从顶层设置迁到每实例**。原来这是一个全局开关(默认关),控制是否把 emoji 和增补字符替换为 `[U+XXXX]` 占位符,以兼容老 Confluence Server(3 字节 MySQL utf8,issue #5;上游 0.3.7 引入)。现在挪到 `ConfluenceInstance.stripSupplementaryChars`,因为同一 vault 内可能有混部需求(Server 老 MySQL + Cloud utf8mb4),需要每个实例独立配置:只有 MySQL 仍跑 3 字节 utf8 的那张 Server 卡片才打开,Cloud 和 utf8mb4 Server 保持关闭,emoji 原样同步。UI 上开关移到每实例卡片里 Validate 按钮下方。`computeContentHash` 里的加盐逻辑(同样来自 0.3.7)原样保留。
+- **兼容迁移**:`migrateLegacySettings`(在保存的 `legacyMigrationVersion` 与 `LEGACY_MIGRATION_VERSION` 不一致时触发,且幂等)现在还会读取遗留的顶层 `stripSupplementaryChars`,如果存在就复制到合成的 "Default" 实例上。这样在 0.3.7 时打开过这个开关的用户升上来后,主 Server 的行为不变。已经迁移过、没有遗留字段的实例不会被改动。
+- **`confluence_username` 改为 per-instance map**。多实例之前,人员笔记 frontmatter 是 `confluence_username: zhangsan`(扁平字符串)——给 `@[[姓名]]` mention 解析用。配置多实例后,同一个人在不同 Confluence 上可能有不同 username(如 SSO 账号 vs 老域账号),所以现在值改为以 `ConfluenceInstance.id` 为键的 map:`confluence_username: { default: zhangsan, inst-abc123: zhang.s }`。每个 `SyncEngine` 只读自己 `instance.id` 对应的 slice;当前实例没有 slice → resolver 返回 null → mention 在该实例上降级为纯文本 `@姓名`。新增 `migrateLegacyUsernames`,在跟 `migrateLegacySettings` / `migrateLegacyFrontmatter` 同一个 gated block 里跑(当 `legacyMigrationVersion !== LEGACY_MIGRATION_VERSION` 时触发一次),扫描全 vault 把扁平字符串形式的 `confluence_username` 一次性迁到 per-instance map,落到第一个已配实例的 id 上(没有任何实例时退回到字面量 `'default'`)。迁移幂等,只重写仍是字符串的笔记;已经迁好的笔记不会被改动。Cloud mention 仍不支持(需要 `ri:account-id`)。
+
+---
+
+## [0.3.7] — 2026-07-24
+
+### English
+
+#### Fixed
+
+- **Emoji and other supplementary-character sync on legacy Confluence Server (issue #5).** `stripSupplementaryChars` was previously applied unconditionally at the end of `postProcessHtml`, replacing every codePoint > 0xFFFF (all emoji and most modern scripts) with `[U+XXXX]` placeholders — regardless of the target server's charset. The flag only existed to protect legacy Confluence Server installs on 3-byte MySQL utf8 from `400 Unsupported character found in content`, but the unconditional behavior punished every Cloud and modern utf8mb4 Server user by silently dropping their emoji. New **Legacy server compatibility: replace emoji with [U+XXXX]** toggle (default off) in the auth section. Leave off for Cloud and utf8mb4 Server — emoji syncs natively. Enable only on Confluence Server whose MySQL still uses 3-byte utf8.
+- **Content-hash dedup respects toggle-off transitions.** When `stripSupplementaryChars` is off and a note contains supplementary characters, `computeContentHash` salts the hash so a page previously synced with `[U+XXXX]` placeholders re-pushes once with the real emoji after the toggle is flipped from on to off, instead of being skipped forever by hash dedup. Hashes of plain-ASCII notes, and all hashes while the toggle is on, stay identical to the pre-0.3.7 scheme — forward-compatible.
+
+### 中文
+
+#### 修复
+
+- **老 Confluence Server 上的 emoji 与增补字符同步 (issue #5)**。原 `stripSupplementaryChars` 在 `postProcessHtml` 末尾被无条件启用,把任何 codePoint > 0xFFFF 的字符(全部 emoji 与大多数现代文字)替换为 `[U+XXXX]` 占位符——而不论目标服务器字符集。这个开关原本只是为了保护老 Confluence Server(3 字节 MySQL utf8)避开 `400 Unsupported character found in content` 错误而存在的;但无条件启用也让 Cloud 与所有现代 utf8mb4 Server 用户的 emoji 被静默吞掉。现改为认证区域下显式的 **老 Server 兼容:emoji 替换为 [U+XXXX]** 开关(默认关)。Cloud 与 utf8mb4 Server 请保持关闭,emoji 原样同步;仅当你的 Confluence Server MySQL 仍是 3 字节 utf8 时打开。
+- **关掉占位开关后内容哈希去重会重推一次**:`stripSupplementaryChars = false` 且笔记含增补字符时,`computeContentHash` 对 hash 加盐;之前用占位符同步过的页面,在开关从开切到关后会重新推送一次真实 emoji,不再因 hash 命中被永久跳过。纯 ASCII 笔记的 hash,以及开关开着时的所有 hash,都与 0.3.7 之前完全一致——本次改动 forward-compatible。
+
+---
 
 ## [0.3.6] — 2026-07-07
 

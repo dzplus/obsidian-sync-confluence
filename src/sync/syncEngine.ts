@@ -16,7 +16,7 @@ import { readBindingFromCache, writeBinding, getLastHashForTarget, TargetBinding
 import { scanBoundNotes } from './noteScanner';
 import { Logger } from '../utils/logger';
 import { SyncConfluenceSettings } from '../settings';
-import { AttachmentRecord, BatchSyncResult, FileSyncResult, NoteBinding, SyncTarget, ConfluenceInstance } from '../types';
+import { AttachmentRecord, BatchSyncResult, FileSyncResult, NoteBinding, SyncTarget, ConfluenceInstance, PerInstanceUsernameMap } from '../types';
 
 export interface SyncEngineDeps {
 	app: App;
@@ -371,18 +371,34 @@ export class SyncEngine {
 	 * 命中后再从目标的 frontmatter 拿 targets[0].url;没有 binding / URL 空都返回 null,降级纯文本。
 	 */
 	/**
-	 * @[[Name]] mention 解析(issue #3 Phase 1):目标笔记 frontmatter 的 confluence_username。
-	 * 有意不做 Confluence API 搜人 —— 同步是定时/批量后台任务,中途发网络请求或弹交互框
-	 * 都会拖垮批量流程;用户在人员笔记里维护一次 confluence_username 即可长期复用。
+	 * `@[[Name]]` mention resolver (issue #3 Phase 1): reads the target
+	 * note's `confluence_username` frontmatter, a per-instance map
+	 * `{ instanceId: username }`. This engine reads only its own
+	 * `instance.id` slice; other instances' slices belong to their own
+	 * engines. Missing key → null → markdownConverter degrades to plain
+	 * `@Name`.
+	 *
+	 * Intentionally does NOT hit the Confluence user API — sync is a
+	 * scheduled/batch background job, and inline network lookups or
+	 * interactive pickers would block the whole batch. Maintain
+	 * `confluence_username` once per person note and it works offline
+	 * from then on. Cloud mentions remain unsupported (require
+	 * `ri:account-id`).
 	 */
 	private makeMentionResolver(): (linkpath: string, sourcePath: string) => string | null {
 		const { app } = this.deps;
+		const instanceId = this.deps.instance.id;
 		return (linkpath, sourcePath) => {
 			const target = app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
 			if (!target) return null;
 			const fm = app.metadataCache.getFileCache(target)?.frontmatter as Record<string, unknown> | undefined;
-			const username = fm?.['confluence_username'];
-			return typeof username === 'string' && username.trim().length > 0 ? username.trim() : null;
+			const raw = fm?.['confluence_username'];
+			if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+			const map = raw as PerInstanceUsernameMap;
+			const value = map[instanceId];
+			if (typeof value !== 'string') return null;
+			const trimmed = value.trim();
+			return trimmed.length > 0 ? trimmed : null;
 		};
 	}
 
