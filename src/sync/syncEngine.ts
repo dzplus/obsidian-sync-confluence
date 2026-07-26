@@ -1,6 +1,7 @@
 import { type App, type TFile, TFile as TFileCtor } from 'obsidian';
 import { ConfluenceApi, ConfluenceApiError } from '../confluence/api';
 import { parsePageIdFromUrl } from '../confluence/urlParser';
+import { urlMatchesBaseUrl, tryParseUrl, splitCsvUrls } from '../confluence/urlMatch';
 import {
 	MarkdownConverter,
 	ConvertContext,
@@ -11,17 +12,32 @@ import {
 import { AttachmentUploader } from '../confluence/attachmentUploader';
 import { IMermaidRenderer, KrokiMermaidRenderer, ObsidianMermaidRenderer } from '../confluence/mermaidRenderer';
 import { PlantUmlRenderer } from '../confluence/plantUmlRenderer';
-import { readBindingFromCache, writeBinding, TargetBindingPatch } from '../frontmatter/handler';
+import { readBindingFromCache, writeBinding, getLastHashForTarget, TargetBindingPatch } from '../frontmatter/handler';
 import { scanBoundNotes } from './noteScanner';
 import { Logger } from '../utils/logger';
 import { SyncConfluenceSettings } from '../settings';
-import { AttachmentRecord, BatchSyncResult, FileSyncResult, NoteBinding, SyncTarget } from '../types';
+import { AttachmentRecord, BatchSyncResult, FileSyncResult, NoteBinding, SyncTarget, ConfluenceInstance } from '../types';
 
 export interface SyncEngineDeps {
 	app: App;
 	settings: SyncConfluenceSettings;
 	logger: Logger;
 	api: ConfluenceApi;
+	/**
+	 * The ConfluenceInstance this engine owns — its credentials and API are
+	 * used. The engine only syncs targets whose URL longest-prefix matches
+	 * this instance, taking every other configured instance into account
+	 * (see `instanceResolver`). Required: after `migrateLegacySettings` the
+	 * plugin always has at least one configured instance.
+	 */
+	instance: ConfluenceInstance;
+	/**
+	 * Full list of configured instances, required for longest-prefix routing
+	 * inside the engine: if A=`example.com` and B=`example.com/wiki`, a target
+	 * at `example.com/wiki/pages/123` belongs to B, not A. Without this list
+	 * engine A would claim the target via its shorter prefix.
+	 */
+	instances: ConfluenceInstance[];
 }
 
 type RenderedDiagram = { block: DiagramBlock; png: ArrayBuffer };
@@ -159,7 +175,7 @@ export class SyncEngine {
 			const contentHash = await this.converter.computeContentHash(markdown, path, {
 				resolveWikilink,
 				resolveMention,
-				stripSupplementaryChars: this.deps.settings.stripSupplementaryChars,
+				stripSupplementaryChars: this.deps.instance.stripSupplementaryChars,
 				defaultImageWidthPx: this.deps.settings.defaultImageWidthPx,
 			});
 			const refs = await this.converter.extractReferences(markdown, path, {
@@ -186,59 +202,137 @@ export class SyncEngine {
 				renderMermaidToPng: this.deps.settings.renderMermaidToPng,
 				renderPlantUmlToPng: this.deps.settings.renderPlantUmlToPng,
 				defaultImageWidthPx: this.deps.settings.defaultImageWidthPx,
-				stripSupplementaryChars: this.deps.settings.stripSupplementaryChars,
+				stripSupplementaryChars: this.deps.instance.stripSupplementaryChars,
 				resolveWikilink,
 				resolveMention,
 			};
 			const storageXhtml = await this.converter.convert(markdown, path, ctx);
 
-			const settled = await Promise.allSettled(binding.targets.map((target, index) =>
-				this.syncTarget(file, binding, target, index, contentHash, refs, mermaidRendered, plantUmlRendered, storageXhtml),
+            // Multi-instance: for each target, check whether it belongs to this engine.
+            // Targets whose URL does not match this engine's instanceBaseUrl are marked
+            // as foreign — they will be synced by another engine's instance and do NOT
+            // count as failures (otherwise the hash-skip invariant breaks and the note
+            // would be re-pushed on every scheduled run).
+            //
+            // perTarget shape (NonNullable version of FileSyncResult['perTarget'][number]):
+            //   - foreign targets (other instances) — { success: false, foreign: true }
+            //   - successful targets                  — { success: true, ... }
+            //   - failed targets (this engine)        — { success: false, error: ... }
+            // Array is always length === binding.targets.length and is indexed by the
+            // target's index in binding.targets.
+			const instanceBaseUrl = this.deps.instance.baseUrl;
+			type PerTargetEntry = NonNullable<FileSyncResult['perTarget']>[number];
+			const perTarget: PerTargetEntry[] = binding.targets.map(() => ({
+				pageId: '',
+				url: '',
+				success: false,
+			}));
+			const filterIndex: number[] = [];
+			binding.targets.forEach((target, index) => {
+				if (!instanceBaseUrl) {
+					filterIndex.push(index);
+					return;
+				}
+				if (this.targetBelongsToInstance(target, instanceBaseUrl)) {
+					filterIndex.push(index);
+				} else {
+					perTarget[index] = {
+						parentUrl: target.parentUrl,
+						pageId: target.pageId,
+						url: target.url,
+						success: false,
+						foreign: true,
+					};
+				}
+			});
+
+			const settled = await Promise.allSettled(filterIndex.map((index) =>
+				this.syncTarget(file, binding, binding.targets[index]!, index, contentHash, refs, mermaidRendered, plantUmlRendered, storageXhtml),
 			));
 
 			const successful: TargetSyncSuccess[] = [];
-			const perTarget: FileSyncResult['perTarget'] = [];
 			settled.forEach((result, index) => {
+				const originalIndex = filterIndex[index]!;
 				if (result.status === 'fulfilled') {
 					successful.push(result.value);
-					perTarget.push({
+					perTarget[originalIndex] = {
 						parentUrl: result.value.parentUrl,
 						pageId: result.value.pageId,
 						url: result.value.url,
 						success: true,
-					});
+					};
 					return;
 				}
-				const failed = this.toTargetFailureResult(result.reason, binding.targets[index]!, index);
-				perTarget.push(failed);
+				const failed = this.toTargetFailureResult(result.reason, binding.targets[originalIndex]!, originalIndex);
+				// toTargetFailureResult returns a plain failure record (no `foreign`
+				// flag); assign it back to the matching target index.
+				perTarget[originalIndex] = {
+					parentUrl: failed.parentUrl,
+					pageId: failed.pageId,
+					url: failed.url,
+					success: false,
+					error: failed.error,
+				};
 			});
 
-			const failures = perTarget.filter((target) => !target.success);
+			// failures = targets that failed inside THIS engine. Foreign targets
+			// are excluded — the foreign engine owns those and decides whether
+			// its slice of the per-instance lastHash gets written.
+			const failures = perTarget.filter((t) => t.success === false && !t.foreign);
 			if (successful.length > 0) {
 				const targetUpdates = binding.targets.map(() => ({}));
-				const mergedAttachments: Record<string, Record<string, AttachmentRecord>> = { ...(binding.attachments ?? {}) };
-				let attachmentChanged = false;
+				const updatedHashEntries: Array<{ pageId: string; hash: string }> = [];
+				const updatedAttachmentEntries: Array<{ pageId: string; attachments: Record<string, AttachmentRecord> }> = [];
 				for (const target of successful) {
-					targetUpdates[target.index] = {
-						parentUrl: target.parentUrl ?? '',
-						url: target.url,
-						pageId: target.pageId,
-					};
+					// Only update targetInfo when something actually changed for
+					// this target. Pure hash-match skips leave targetInfo at its
+					// existing frontmatter values (no need to re-write).
+					if (!target.skipped) {
+						targetUpdates[target.index] = {
+							parentUrl: target.parentUrl ?? '',
+							url: target.url,
+							pageId: target.pageId,
+						};
+						updatedHashEntries.push({ pageId: target.pageId, hash: contentHash });
+					}
 					if (target.attachments) {
-						mergedAttachments[target.pageId] = target.attachments;
-						attachmentChanged = true;
+						updatedAttachmentEntries.push({ pageId: target.pageId, attachments: target.attachments });
 					}
 				}
-				const patch: Parameters<typeof writeBinding>[2] = { targetUpdates };
-				patch._formats = binding._formats;
 				const allTargetsSucceeded = failures.length === 0;
-				const anyUpdated = successful.some((target) => !target.skipped);
-				if (allTargetsSucceeded && anyUpdated) {
-					patch.lastSynced = new Date().toISOString();
-					patch.lastHash = contentHash;
+				const anyUpdated = updatedHashEntries.length > 0;
+				const anyAttachmentUpdates = updatedAttachmentEntries.length > 0;
+				// Did any non-foreign target touch confluence_url / parent_url /
+				// pageId? (freshly created page → new id; user reassigned pageId
+				// → different url). Pure skips produce no entry, so this is false
+				// when every owned target was a hash-match skip.
+				const anyTargetInfoChanged = targetUpdates.some((u) =>
+					Object.keys(u).length > 0,
+				);
+				const needsWriteback = anyUpdated
+					|| anyAttachmentUpdates
+					|| anyTargetInfoChanged;
+				if (!needsWriteback) {
+					// All-owned-skipped pure hash-match: no frontmatter write. The
+					// existing per-instance hash slice already records the cached
+					// value, so future syncs continue to skip correctly.
+				} else {
+					const patch: Parameters<typeof writeBinding>[2] = { targetUpdates };
+					patch._formats = binding._formats;
+					const instanceId = this.deps.instance.id;
+					if (allTargetsSucceeded) {
+						if (anyUpdated) patch.lastSynced = new Date().toISOString();
+						const myHash: Record<string, string> = {};
+						for (const e of updatedHashEntries) myHash[e.pageId] = e.hash;
+						patch.lastHashDelta = { [instanceId]: myHash };
+						if (anyAttachmentUpdates) {
+							const myAttachments: Record<string, Record<string, AttachmentRecord>> = {};
+							for (const e of updatedAttachmentEntries) myAttachments[e.pageId] = e.attachments;
+							patch.attachmentsDelta = { [instanceId]: myAttachments };
+						}
+					}
+					await writeBinding(this.deps.app, file, patch, this.deps.settings.frontmatterKey);
 				}
-				if (attachmentChanged) patch.attachments = mergedAttachments;
-				await writeBinding(this.deps.app, file, patch, this.deps.settings.frontmatterKey);
 			}
 
 			const uploadedAttachments = successful.reduce((sum, target) => sum + target.uploadedAttachments, 0);
@@ -292,6 +386,49 @@ export class SyncEngine {
 		};
 	}
 
+	/**
+	 * Multi-instance routing inside the engine, relative to THIS engine.
+	 *
+	 * Returns true when `target.url` longest-prefix-matches THIS engine and
+	 * NOT a longer-prefix match in another instance. This is symmetric with
+	 * `InstanceResolver.resolve()` at the per-file level: the engine knows
+	 * all configured instances (deps.instances), and if a particular URL
+	 * matches another instance with a longer base, we leave that URL alone
+	 * — the other engine will pick it up.
+	 *
+	 * Only `target.url` is considered. `target.parentUrl` is the parent
+	 * page reference used to create the page when no pageId exists yet —
+	 * intentionally it may belong to a different instance (e.g. one
+	 * instance's page tree is mirrored on another). Letting parentUrl
+	 * influence ownership would cause both engines to claim the same
+	 * target and write garbled content; see I1 in the final review.
+	 *
+	 * Without instances[] the engine syncs every target (legacy single-
+	 * instance mode).
+	 */
+	private targetBelongsToInstance(target: SyncTarget, instanceBaseUrl: string): boolean {
+		if (!instanceBaseUrl) return true;
+		const allInstances = this.deps.instances;
+		const allBaseUrls = allInstances.map((i) => i.baseUrl).filter((b) => !!b);
+		const candidates: string[] = [];
+		if (typeof target.url === 'string' && target.url.trim().length > 0) {
+			for (const part of splitCsvUrls(target.url)) candidates.push(part);
+		}
+		for (const candidate of candidates) {
+			if (!tryParseUrl(candidate)) continue;
+			// Find the longest-prefix match across all instances.
+			let bestBase: string | null = null;
+			let bestLen = -1;
+			for (const base of allBaseUrls) {
+				if (!urlMatchesBaseUrl(candidate, base)) continue;
+				const len = base.trim().replace(/\/+$/, '').length;
+				if (len > bestLen) { bestBase = base; bestLen = len; }
+			}
+			if (bestBase && bestBase === instanceBaseUrl) return true;
+		}
+		return false;
+	}
+
 	private makeWikilinkResolver(): (linkpath: string, sourcePath: string) => ResolvedWikilink | null {
 		const { app, settings } = this.deps;
 		const findTarget = (linkpath: string, sourcePath: string): TFile | null => {
@@ -333,6 +470,7 @@ export class SyncEngine {
 	 */
 	private async ensurePageIdsForBatch(files: TFile[]): Promise<void> {
 		const { app, api, settings, logger } = this.deps;
+		const instanceBaseUrl = this.deps.instance.baseUrl;
 		for (const file of files) {
 			const binding = readBindingFromCache(app, file, settings.frontmatterKey);
 			if (!binding) continue;
@@ -340,6 +478,13 @@ export class SyncEngine {
 			const targetUpdates: TargetBindingPatch[] = [];
 			let changed = false;
 			for (const target of binding.targets) {
+				// Multi-instance: this engine only owns targets whose URL prefix
+				// matches its instanceBaseUrl. Foreign targets are left alone —
+				// the matching engine will handle them.
+				if (instanceBaseUrl && !this.targetBelongsToInstance(target, instanceBaseUrl)) {
+					targetUpdates.push({});
+					continue;
+				}
 				let pageId = target.pageId || (target.url ? parsePageIdFromUrl(target.url) ?? '' : '');
 				if (pageId === '0') pageId = '';
 				if (pageId) {
@@ -440,7 +585,10 @@ export class SyncEngine {
 				this.deps.logger.info(`已创建子页面 ${created.id}: ${created.webUrl}`);
 			}
 
-			if (!createdNewPage && binding.lastHash === contentHash && target.pageId === pageId && target.url.trim().length > 0) {
+			if (!createdNewPage
+				&& getLastHashForTarget(binding, this.deps.instance.id, pageId) === contentHash
+				&& target.pageId === pageId
+				&& target.url.trim().length > 0) {
 				return {
 					index,
 					parentUrl: target.parentUrl,
@@ -454,7 +602,13 @@ export class SyncEngine {
 				};
 			}
 
-			const previousAttachments = binding.attachments?.[pageId] ?? {};
+			const instanceId = this.deps.instance.id;
+			// Attachment IDs are scoped per-Confluence-installation, so the
+			// same filename uploaded to two instances gets two independent
+			// attachment records. Reading back by [instanceId][pageId] is
+			// intentional — a cross-instance lookup would return foreign
+			// attachment IDs that aren't valid on this instance.
+			const previousAttachments = binding.attachments?.[instanceId]?.[pageId] ?? {};
 			const attachmentResult = this.deps.settings.uploadAttachments
 				? await this.uploader.syncAttachments(pageId, refs.attachments, previousAttachments)
 				: { map: {} as Record<string, AttachmentRecord>, uploaded: 0, skipped: 0, failed: 0 };

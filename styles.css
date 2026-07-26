@@ -26,6 +26,10 @@ Sync Confluence 插件样式
     color: var(--text-error);
 }
 
+.sync-confluence-status.partial {
+    color: var(--text-warning);
+}
+
 @keyframes sync-confluence-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
@@ -150,4 +154,19 @@ Sync Confluence 插件样式
 .sync-confluence-prop-btn svg {
     width: 14px;
     height: 14px;
+}
+
+/* Multi-instance settings card */
+.sync-confluence-instance-card {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    background: var(--background-secondary);
+}
+
+.sync-confluence-instance-dups {
+    color: var(--text-error);
+    font-size: var(--font-ui-small);
+    margin-top: 4px;
 }

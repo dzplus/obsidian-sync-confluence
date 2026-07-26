@@ -12,9 +12,11 @@ export const en = {
 	// ===== Notices (transient toast messages) =====
 	notice: {
 		noteNotOpen: 'No active note',
+		noteNotBound: 'Note is not bound to Confluence',
 		fillAuthFirst: 'Please fill in Confluence credentials in Settings first',
 		syncResult: 'Sync Confluence: {summary}',
 		syncPartialFail: 'Sync Confluence partial failure: {summary}',
+		syncFailed: 'Sync Confluence failed: {summary}',
 		folderNoBoundNotes: 'No bound notes under {folder}',
 		syncedNoChange: 'No change, skipped: {file}',
 		syncedOk: 'Synced: {file}',
@@ -29,6 +31,9 @@ export const en = {
 		templateWriteFailed: 'Failed to write template, see console',
 		exportPreviewOk: 'Storage preview exported: {path}',
 		exportPreviewFailed: 'Failed to export preview: {error}',
+		unmatchedUrl: 'No matching Confluence instance found for URL: {url}',
+		urlDoesNotMatchInstance: 'URL does not match the selected instance ({instance}): {url}',
+		instanceSummary: '{name}: updated {updated} / skipped {skipped} / failed {failed}',
 		// CreateBoundNoteModal
 		pathRequired: 'Please fill in the note path',
 		urlRequired: 'Please fill in the Confluence URL',
@@ -71,12 +76,14 @@ export const en = {
 		syncing: '☁ Syncing',
 		success: '☁ Synced',
 		failed: '☁ Failed',
+		partial: '☁ Partial',
 		tooltipIdle: 'Sync Confluence: idle{lastSuffix}',
 		tooltipLastSync: ' — last sync: {time}',
 		tooltipSyncing: 'Sync Confluence: syncing…',
 		tooltipSuccess: 'Sync Confluence: synced — {time}',
 		tooltipFailed: 'Sync Confluence: failed',
 		tooltipFailedWithError: 'Sync failed: {error}',
+		tooltipPartial: 'Sync Confluence: partial — some instances failed',
 		syncingLabelPrefix: '☁ {text}',
 	},
 
@@ -90,6 +97,17 @@ export const en = {
 			attachments: 'Attachments',
 			diagrams: 'Diagram rendering (Mermaid / PlantUML)',
 			ui: 'Notifications and status bar',
+		},
+		instances: {
+			add: 'Add Confluence Instance',
+			remove: 'Remove',
+			moveUp: 'Move up',
+			moveDown: 'Move down',
+			name: 'Instance name',
+			nameDesc: 'A unique display name for this instance',
+			duplicateName: 'Instance name must be unique',
+			duplicateBaseUrl: 'Base URL must be unique',
+			maxReached: 'Maximum of 10 instances reached — remove one before adding another',
 		},
 		baseUrl: {
 			name: 'Confluence base URL',
@@ -112,6 +130,9 @@ export const en = {
 			descBasic: 'Pick a secret already stored in the key vault. Cloud uses an Atlassian API Token; Server with classic accounts uses the login password.',
 			descBearer: 'Pick a PAT already stored in the key vault (create one at Confluence → Profile → Personal Access Tokens).',
 			placeholderSecretName: 'Secret name (requires Obsidian 1.11.4+ key vault)',
+			placeholderPasteToken: 'Paste token here',
+			savedLabel: 'Saved key: {key}',
+			saveFailed: 'Failed to save token to key vault',
 			hintLabel: 'Create a secret:',
 			hintBody: ' Settings → Key vault → Create new secret. Generate the token at Atlassian account → Security → API tokens and paste it as the secret value.',
 		},
@@ -127,6 +148,10 @@ export const en = {
 		stripSupplementary: {
 			name: 'Legacy server compatibility: replace emoji with [U+XXXX]',
 			desc: 'Only for Confluence Server whose MySQL still uses 3-byte utf8 (sync fails with "Unsupported character found in content"). Replaces emoji and other supplementary characters with [U+XXXX] placeholders. Leave off for Cloud and utf8mb4 servers — emoji sync natively.',
+		},
+		instanceSelect: {
+			label: 'Confluence instance',
+			desc: 'Select which instance to bind this note to',
 		},
 		interval: {
 			name: 'Sync interval (minutes)',

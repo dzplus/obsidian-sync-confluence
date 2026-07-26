@@ -26,6 +26,7 @@
 ## 💡 Why Sync Confluence
 
 - **Frontmatter-driven binding** — drop a Confluence page URL into your note's frontmatter, that's the entire wiring.
+- **Multi-instance** — connect up to 10 Confluence instances per vault; notes are routed by longest-prefix URL matching and multi-target notes can span instances.
 - **Cloud + Server / Data Center** — Basic auth (email + API token) for Atlassian Cloud, Bearer (Personal Access Token) for Server 7.9+ / DC.
 - **Content-hash skip** — unchanged notes are not re-pushed; bandwidth and audit log stay clean.
 - **Local attachments auto-upload** — `![[image.png]]` embeds become Confluence attachments; regular images display at a configurable width (192px by default) without resizing the uploaded source.
@@ -101,6 +102,29 @@ Any of these works:
 - Let the timer fire (default: every 30 min — change in **Sync schedule**).
 
 The status-bar pill shows the last result: `☁ Idle` / `☁ Syncing` / `☁ Synced` / `☁ Failed`.
+
+## 🏢 Multi-instance Confluence
+
+If you juggle notes across multiple Confluence servers (e.g. a personal Cloud workspace plus a corporate Server), wire them all up in one vault.
+
+**Add an instance**
+
+1. **Settings → Sync Confluence → Confluence authentication → Add Confluence Instance**.
+2. Fill the card:
+   - **Instance name** — a unique display name (`Personal`, `Acme`, …).
+   - **Base URL** — e.g. `https://xxx.atlassian.net/wiki` (Cloud) or `https://confluence.acme.com` (Server).
+   - **Authentication type** + **account** + **token** (Obsidian's secret vault).
+3. Click **Validate credentials** to confirm.
+
+**Routing**
+
+For every note the plugin looks at every URL across `confluence_url` / `confluence_parent_url` (CSV and array forms included) and picks the instance whose `baseUrl` is the **longest matching prefix**. A note can land in several instances if its targets span them — each instance's engine syncs only the targets that belong to it.
+
+> Up to **10 instances** per vault. If a note's URLs don't match any configured base URL, it's surfaced as `Unmatched` in the sync summary and skipped.
+
+**Creating a bound note**
+
+`Create bound note` shows the instance dropdown only when more than one instance is configured, and validates that the entered URL starts with the chosen instance's base URL.
 
 ## 📝 Frontmatter cheatsheet
 
@@ -262,6 +286,7 @@ The `release.yml` workflow builds and attaches the three required files to a Git
 ### 💡 为什么用 Sync Confluence
 
 - **Frontmatter 驱动绑定** —— 在笔记 frontmatter 里写一个 Confluence 页面 URL，就这一步。
+- **多实例（Multi-instance）** —— 一个 vault 可连接最多 10 个 Confluence 实例，笔记按 URL 最长前缀匹配路由；multi-target 笔记可跨实例同步。
 - **Cloud + Server / DC** —— Cloud 用 Basic（邮箱 + API token），Server 7.9+ / DC 用 Bearer（个人访问令牌）。
 - **内容哈希去重** —— 没改的笔记不重复推送，省带宽也省审计噪声。
 - **本地附件自动上传** —— 笔记里 `![[image.png]]` 形式引用的本地图片自动上传为 Confluence 附件;普通图片默认显示宽度为 192px(可配置),上传原图不压缩。
@@ -337,6 +362,29 @@ confluence_url: https://xxx.atlassian.net/wiki/spaces/XXX/pages/12345/Title
 - 等定时器（默认 30 分钟一次，**同步调度** 里改）。
 
 状态栏小图标会显示最近一次结果：`☁ 空闲` / `☁ 同步中` / `☁ 已同步` / `☁ 失败`。
+
+### 🏢 多实例 Confluence
+
+如果你要在同一个 vault 里同时管多个 Confluence 服务器（比如个人 Cloud + 公司 Server），多实例支持让你一次性配齐。
+
+**新增实例**
+
+1. **Settings → Sync Confluence → Confluence authentication → 新增 Confluence 实例**。
+2. 填表：
+   - **实例名称** —— 唯一的显示名（`个人` / `公司` 等）。
+   - **Base URL** —— 例如 `https://xxx.atlassian.net/wiki`（Cloud）或 `https://confluence.company.com`（Server）。
+   - **认证方式** + **账号** + **Token**（Obsidian 密钥库）。
+3. 点 **Validate credentials** 校验。
+
+**路由**
+
+每个笔记，插件会把所有 `confluence_url` / `confluence_parent_url`（含 CSV 和数组形式）里的 URL 拿出来，挑出 **最长前缀匹配** 的实例作为目标。一个笔记可以同时落到多个实例里——比如它的多 target 横跨实例，每个实例的 engine 只会同步属于自己的 target。
+
+> 单个 vault 最多 **10 个实例**。如果笔记的 URL 不匹配任何配置的 base URL，会在 sync summary 里显示成 `Unmatched` 并跳过。
+
+**创建绑定笔记**
+
+只有当配置了多个实例时，`Create bound note` 命令才会显示实例下拉框，并校验输入的 URL 是否以所选实例的 base URL 开头。
 
 ### 📝 Frontmatter 速查
 

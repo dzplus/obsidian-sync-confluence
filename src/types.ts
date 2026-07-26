@@ -13,6 +13,7 @@ export enum SyncStatus {
 	Syncing = 'syncing',
 	Success = 'success',
 	Failed = 'failed',
+	Partial = 'partial',
 }
 
 /**
@@ -24,6 +25,7 @@ export const SyncStatusText: Record<SyncStatus, string> = {
 	get [SyncStatus.Syncing]() { return t('status.syncing'); },
 	get [SyncStatus.Success]() { return t('status.success'); },
 	get [SyncStatus.Failed]() { return t('status.failed'); },
+	get [SyncStatus.Partial]() { return t('status.partial'); },
 } as Record<SyncStatus, string>;
 
 export interface AttachmentRecord {
@@ -55,9 +57,23 @@ export interface NoteBinding {
 	/** in-memory only; used to preserve scalar/csv/array frontmatter style on write */
 	_formats?: NoteBindingFormats;
 	lastSynced?: string;
-	lastHash?: string;
-	/** pageId -> filename -> { hash, id } 附件缓存,用于按页面隔离附件 ID */
-	attachments?: Record<string, Record<string, AttachmentRecord>>;
+	/**
+	 * Cached content hash used for the per-target skip check. Shape:
+	 * `instanceId → pageId → hash`. The instanceId layer is required because
+	 * Confluence pageIds are local to a Server/DC installation — two
+	 * instances can have the same pageId, and a single pageId key would let
+	 * engine A's stamp vouch for engine B's target. Each engine owns only
+	 * its own instance slot; foreign slots are preserved verbatim. Pre-
+	 * multi-instance string form was migrated to this shape by
+	 * `migrateLegacyFrontmatter` on plugin load.
+	 */
+	lastHash?: Record<string, Record<string, string>>;
+	/**
+	 * Attachment cache. Same nested shape: `instanceId → pageId → filename →
+	 * { hash, id }`. Pre-multi-instance flat form
+	 * `{ filename: { hash, id } }` was migrated by `migrateLegacyFrontmatter`.
+	 */
+	attachments?: Record<string, Record<string, Record<string, AttachmentRecord>>>;
 }
 
 /** markdown 中提取出的本地附件引用 */
@@ -82,13 +98,21 @@ export interface FileSyncResult {
 	error?: string;
 	uploadedAttachments?: number;
 	skippedAttachments?: number;
-	perTarget?: Array<{
-		parentUrl?: string;
-		pageId: string;
-		url: string;
-		success: boolean;
-		error?: string;
-	}>;
+		perTarget?: Array<{
+			parentUrl?: string;
+			pageId: string;
+			url: string;
+			success: boolean;
+			error?: string;
+			/**
+			 * Multi-instance: true means the target belongs to a different
+			 * instance and was not handled by this engine. It does NOT count as a
+			 * failure — only this engine's owned targets decide whether to write
+			 * its slice of the per-instance lastHash. Foreign slices stay
+			 * untouched so the other engine's hash-skip invariant stays correct.
+			 */
+			foreign?: boolean;
+		}>;
 }
 
 /** 一次 syncAll 的汇总 */
@@ -98,4 +122,52 @@ export interface BatchSyncResult {
 	skipped: number;
 	failed: number;
 	files: FileSyncResult[];
+}
+
+// ========== Multi-Confluence Support Types ==========
+
+/** Configuration for a single Confluence instance. */
+export interface ConfluenceInstance {
+	/** Stable identifier (used for SecretStorage key derivation and UI references). */
+	id: string;
+	/** Display name. */
+	name: string;
+	/** Example: https://your-domain.atlassian.net/wiki */
+	baseUrl: string;
+	/** Auth mode: basic (username + password/token) or bearer (PAT). */
+	authType: 'basic' | 'bearer';
+	/** Required for basic mode. */
+	username: string;
+	/** Key name in SecretStorage (the secret value is never stored in plain text). */
+	apiToken: string;
+	/**
+	 * Legacy-confluence-server compatibility: replace emoji and other
+	 * supplementary characters with [U+XXXX] placeholders so pages sync
+	 * successfully when the server's MySQL still uses 3-byte utf8 (issue #5).
+	 * Default off; emoji sync natively on Cloud and utf8mb4 servers. Per-instance
+	 * because users may maintain a mix of legacy Server and modern Cloud.
+	 */
+	stripSupplementaryChars: boolean;
+}
+
+/** Sync result for a single instance. */
+export interface PerInstanceSyncResult {
+	instanceName: string;
+	instanceId: string;
+	total: number;
+	updated: number;
+	skipped: number;
+	failed: number;
+	files: FileSyncResult[];
+}
+
+/** Aggregate result across all configured instances. */
+export interface MultiInstanceBatchResult {
+	instances: PerInstanceSyncResult[];
+	total: number;
+	updated: number;
+	skipped: number;
+	failed: number;
+	/** Files that matched no configured instance. */
+	unmatched: FileSyncResult[];
 }
