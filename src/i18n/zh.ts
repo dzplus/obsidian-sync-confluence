@@ -154,6 +154,10 @@ export const zh: Messages = {
 			name: '附件大小上限(MB)',
 			desc: '超过此大小的附件会被跳过',
 		},
+		defaultImageWidth: {
+			name: '图片默认显示宽度(px)',
+			desc: '同步到 Confluence 后普通图片的显示宽度,默认 192px;填 0 使用原始大小。只改变页面显示尺寸,不会压缩上传的原图,也不影响 Mermaid / PlantUML 图表。',
+		},
 		diagramsIntro:
 			'开启后,对应代码块会在本地或远端渲染为 PNG 并上传到 Confluence;关闭则原样推送代码块,由 Confluence 端 App 渲染或显示为源码。',
 		mermaid: {

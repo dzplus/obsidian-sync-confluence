@@ -162,6 +162,10 @@ export const en = {
 			name: 'Max attachment size (MB)',
 			desc: 'Attachments larger than this are skipped',
 		},
+		defaultImageWidth: {
+			name: 'Default image display width (px)',
+			desc: 'Display width for regular images after syncing to Confluence. Defaults to 192px; use 0 for original size. This does not resize the uploaded source file or affect Mermaid / PlantUML diagrams.',
+		},
 		diagramsIntro:
 			'When enabled, matching code blocks are pre-rendered (locally or via a server) and uploaded as PNG attachments. When disabled, the code block is pushed as-is and rendered by a Confluence-side macro (or shown as source).',
 		mermaid: {

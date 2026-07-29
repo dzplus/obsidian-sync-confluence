@@ -340,6 +340,15 @@ WithAttr -> Block: 带元数据
 > @enduml
 > ```
 
+## 25.1 回归测试 — 同页标题锚点
+
+> 旧行为会把 `#标题` 剥掉,最终只剩普通文字。期望 storage 中生成
+> `<ac:link ac:anchor="锚点回归目标">`,并由 Confluence 跳到下方同名标题。
+
+跳转到 [[#锚点回归目标]]。
+
+### 锚点回归目标
+
 ## 26. 回归测试 — CRLF 行尾(Windows vault / 外部工具生成的笔记)
 
 > 假说:markdown-it 入口把 \r\n 归一成 \n,而 extractFenceBlocks 直接按 \n split 会把 \r 留在行尾 → 所有 CRLF fence 的 hash 与渲染侧永远不一致 → 附件上传成功但正文 fallback 成代码块。本节所有行(含 fence 体)均为字面 CRLF。

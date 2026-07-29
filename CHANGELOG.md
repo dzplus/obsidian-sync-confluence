@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] — 2026-07-29
+
+### English
+
+#### Added
+
+- **Configurable image display width.** Regular local images now sync with a default Confluence display width of 192px, configurable under *Attachments → Default image display width*. Set it to `0` to keep the original size. The source attachment is still uploaded unchanged, and diagram images keep their natural dimensions.
+- **[issue #4 follow-up] Heading anchor links.** Same-page `[[#Heading]]` / `[text](#heading)` and cross-page `[[Note#Heading]]` / `[text](note.md#heading)` links now become native Confluence `ac:link` anchors. Previously the converter deliberately stripped the heading fragment, leaving same-page links as plain text and cross-page links pointing only to the page.
+
+### 中文
+
+#### 新增
+
+- **图片显示宽度可配置**:普通本地图片同步到 Confluence 后默认显示为 192px,可在 *附件 → 图片默认显示宽度* 中修改;填 `0` 保持原始大小。上传的源附件不会被压缩,Mermaid / PlantUML 图表仍保持自然尺寸。
+- **[issue #4 补全] 标题锚点链接**:同页 `[[#标题]]` / `[文本](#标题)` 和跨页 `[[笔记#标题]]` / `[文本](note.md#标题)` 现在会生成 Confluence 原生 `ac:link` 锚点。此前转换器会主动剥掉标题片段,导致同页锚点退化为纯文本、跨页链接只能跳到页面顶部。
+
 ## [0.3.6] — 2026-07-07
 
 ### English

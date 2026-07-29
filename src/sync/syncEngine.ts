@@ -1,7 +1,13 @@
 import { type App, type TFile, TFile as TFileCtor } from 'obsidian';
 import { ConfluenceApi, ConfluenceApiError } from '../confluence/api';
 import { parsePageIdFromUrl } from '../confluence/urlParser';
-import { MarkdownConverter, ConvertContext, ExtractedReferences, DiagramBlock } from '../confluence/markdownConverter';
+import {
+	MarkdownConverter,
+	ConvertContext,
+	ExtractedReferences,
+	DiagramBlock,
+	ResolvedWikilink,
+} from '../confluence/markdownConverter';
 import { AttachmentUploader } from '../confluence/attachmentUploader';
 import { IMermaidRenderer, KrokiMermaidRenderer, ObsidianMermaidRenderer } from '../confluence/mermaidRenderer';
 import { PlantUmlRenderer } from '../confluence/plantUmlRenderer';
@@ -154,6 +160,7 @@ export class SyncEngine {
 				resolveWikilink,
 				resolveMention,
 				stripSupplementaryChars: this.deps.settings.stripSupplementaryChars,
+				defaultImageWidthPx: this.deps.settings.defaultImageWidthPx,
 			});
 			const refs = await this.converter.extractReferences(markdown, path, {
 				mermaidExt: this.mermaid?.extension(),
@@ -178,6 +185,7 @@ export class SyncEngine {
 				plantUmlFilenameByHash,
 				renderMermaidToPng: this.deps.settings.renderMermaidToPng,
 				renderPlantUmlToPng: this.deps.settings.renderPlantUmlToPng,
+				defaultImageWidthPx: this.deps.settings.defaultImageWidthPx,
 				stripSupplementaryChars: this.deps.settings.stripSupplementaryChars,
 				resolveWikilink,
 				resolveMention,
@@ -284,7 +292,7 @@ export class SyncEngine {
 		};
 	}
 
-	private makeWikilinkResolver(): (linkpath: string, sourcePath: string) => string | null {
+	private makeWikilinkResolver(): (linkpath: string, sourcePath: string) => ResolvedWikilink | null {
 		const { app, settings } = this.deps;
 		const findTarget = (linkpath: string, sourcePath: string): TFile | null => {
 			const direct = app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
@@ -312,7 +320,7 @@ export class SyncEngine {
 			const binding = readBindingFromCache(app, target, settings.frontmatterKey);
 			if (!binding) return null;
 			const url = binding.targets[0]?.url?.trim();
-			return url && url.length > 0 ? url : null;
+			return url && url.length > 0 ? { url, title: target.basename } : null;
 		};
 	}
 

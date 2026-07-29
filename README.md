@@ -28,7 +28,7 @@
 - **Frontmatter-driven binding** — drop a Confluence page URL into your note's frontmatter, that's the entire wiring.
 - **Cloud + Server / Data Center** — Basic auth (email + API token) for Atlassian Cloud, Bearer (Personal Access Token) for Server 7.9+ / DC.
 - **Content-hash skip** — unchanged notes are not re-pushed; bandwidth and audit log stay clean.
-- **Local attachments auto-upload** — `![[image.png]]` embeds become Confluence attachments.
+- **Local attachments auto-upload** — `![[image.png]]` embeds become Confluence attachments; regular images display at a configurable width (192px by default) without resizing the uploaded source.
 - **Auto-create child pages** — set `confluence_parent_url` and the first sync creates the page, then writes the URL back.
 - **Mermaid / PlantUML pre-render** — diagrams are rendered to an image attachment before sync. Mermaid offers two engines: a kroki HTTP service (PNG, max compatibility) or the in-process Obsidian engine (SVG, pixel-identical to your preview).
 - **Many triggers** — ribbon icon, command palette, editor / file-tree right-click, scheduled timer.
@@ -160,6 +160,8 @@ confluence_page_id: 12345, ""
 
 **Wikilinks.** `[[Other Note]]` / `[[Other Note|alias]]` (and standard `[text](note.md)` links) are resolved through Obsidian's metadata cache. If the target note has a `confluence_url` binding, the link becomes a hyperlink to that Confluence page; otherwise it degrades to plain text. Batch syncs pre-create placeholder pages for parent-only notes first, so cross-references inside the same batch resolve on the first sync.
 
+**Heading anchors.** Same-page `[[#Heading]]` / `[text](#heading)` and cross-page `[[Other Note#Heading]]` / `[text](note.md#heading)` links are converted to native Confluence heading anchors. Heading matching is case-sensitive, following Confluence behavior.
+
 **User mentions (Server / DC only).** Write `@[[John Doe]]` to mention a Confluence user. The plugin looks up the linked note (`John Doe.md`) and reads `confluence_username` from its frontmatter:
 
 ```yaml
@@ -262,7 +264,7 @@ The `release.yml` workflow builds and attaches the three required files to a Git
 - **Frontmatter 驱动绑定** —— 在笔记 frontmatter 里写一个 Confluence 页面 URL，就这一步。
 - **Cloud + Server / DC** —— Cloud 用 Basic（邮箱 + API token），Server 7.9+ / DC 用 Bearer（个人访问令牌）。
 - **内容哈希去重** —— 没改的笔记不重复推送，省带宽也省审计噪声。
-- **本地附件自动上传** —— 笔记里 `![[image.png]]` 形式引用的本地图片自动上传为 Confluence 附件。
+- **本地附件自动上传** —— 笔记里 `![[image.png]]` 形式引用的本地图片自动上传为 Confluence 附件;普通图片默认显示宽度为 192px(可配置),上传原图不压缩。
 - **自动建子页面** —— 设 `confluence_parent_url`，首次同步时插件自动建子页面并把新 URL 回写到 `confluence_url`。
 - **Mermaid / PlantUML 预渲染** —— 同步前渲染成图片附件，Confluence 端不装宏也能看图。Mermaid 支持两种引擎：kroki 远端服务（PNG，兼容性最好）或 Obsidian 内置引擎（SVG，跟笔记预览像素级一致）。
 - **多种触发方式** —— Ribbon、命令面板、编辑器 / 文件树右键、定时器。
@@ -393,6 +395,8 @@ confluence_page_id: 12345, ""
 ### 🔗 链接与 mention
 
 **Wikilink。** `[[另一篇笔记]]` / `[[另一篇笔记|别名]]`（以及标准 `[文本](note.md)` 链接）会经 Obsidian metadata cache 解析：目标笔记已绑定 `confluence_url` → 替换为指向那个 Confluence 页面的超链接；未绑定 → 降级为纯文本。批量同步会先给"仅有 parent"的笔记预建占位页，同批笔记互相引用首次同步即可解析。
+
+**标题锚点。** 同页 `[[#标题]]` / `[文本](#标题)` 和跨页 `[[另一篇笔记#标题]]` / `[文本](note.md#标题)` 会转换为 Confluence 原生标题锚点。标题匹配遵循 Confluence 规则，区分大小写。
 
 **用户 mention（仅 Server / DC）。** 写 `@[[张三]]` 即可 mention Confluence 用户。插件查找被链接的笔记（`张三.md`），读其 frontmatter 的 `confluence_username`：
 

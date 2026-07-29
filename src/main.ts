@@ -466,6 +466,7 @@ export default class SyncConfluencePlugin extends Plugin {
 				plantUmlFilenameByHash: new Map(refs.plantUml.map((b) => [b.hash, b.filename])),
 				renderMermaidToPng: this.settings.renderMermaidToPng,
 				renderPlantUmlToPng: this.settings.renderPlantUmlToPng,
+				defaultImageWidthPx: this.settings.defaultImageWidthPx,
 				stripSupplementaryChars: this.settings.stripSupplementaryChars,
 			});
 			const lines = xhtml.split('\n').map((l, i) => `${String(i + 1).padStart(5, ' ')}  ${l}`).join('\n');

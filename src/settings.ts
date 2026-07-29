@@ -43,6 +43,8 @@ export interface SyncConfluenceSettings {
 	// ========== 附件 ==========
 	uploadAttachments: boolean;
 	maxAttachmentSizeMB: number;
+	/** 普通图片在 Confluence 页面中的默认显示宽度(px);0=原始大小 */
+	defaultImageWidthPx: number;
 
 	// ========== 图表渲染 ==========
 	renderMermaidToPng: boolean;
@@ -77,6 +79,7 @@ export const DEFAULT_SETTINGS: SyncConfluenceSettings = {
 
 	uploadAttachments: true,
 	maxAttachmentSizeMB: 10,
+	defaultImageWidthPx: 192,
 
 	renderMermaidToPng: true,
 	mermaidRenderer: 'kroki',
@@ -258,6 +261,18 @@ export class SyncConfluenceSettingTab extends PluginSettingTab {
 					.onChange(async (v) => {
 						const n = parseFloat(v);
 						s.maxAttachmentSizeMB = isNaN(n) || n <= 0 ? 10 : n;
+						await this.plugin.saveSettings();
+					}));
+
+			new Setting(el)
+				.setName(t('settings.defaultImageWidth.name'))
+				.setDesc(t('settings.defaultImageWidth.desc'))
+				.addText((tx) => tx
+					.setPlaceholder('192')
+					.setValue(String(s.defaultImageWidthPx))
+					.onChange(async (v) => {
+						const n = parseInt(v, 10);
+						s.defaultImageWidthPx = isNaN(n) ? DEFAULT_SETTINGS.defaultImageWidthPx : Math.max(0, n);
 						await this.plugin.saveSettings();
 					}));
 		});

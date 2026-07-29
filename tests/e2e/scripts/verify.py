@@ -245,6 +245,15 @@ def main() -> int:
         f"raw plantuml: plain={raw_plantuml_count} with_attr={raw_plantuml_with_attr_count}",
     ))
 
+    # Check: §25.1 同页标题锚点必须保留为 Confluence 原生 ac:link。
+    anchor_name = "锚点回归目标"
+    has_anchor_link = f'ac:link ac:anchor="{anchor_name}"' in storage
+    checks.append(CheckResult(
+        "same-page heading anchor preserved as native ac:link",
+        has_anchor_link,
+        f'expected ac:anchor="{anchor_name}" present={has_anchor_link}',
+    ))
+
     return print_report(checks, args)
 
 
