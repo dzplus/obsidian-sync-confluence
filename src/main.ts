@@ -131,10 +131,28 @@ export default class SyncConfluencePlugin extends Plugin {
 		this.legacyMigrationVersion = legacyMigrationVersion ?? null;
 		if (this.legacyMigrationVersion !== LEGACY_MIGRATION_VERSION) {
 			migrateLegacySettings(this.settings, this.logger);
+			// `getMarkdownFiles()` returns 0 at plugin onload on large vaults —
+			// Obsidian hasn't finished indexing yet. Run inline when the vault
+			// is already populated (small vaults), otherwise defer 5s (same
+			// window as `syncOnStartup`) so the vault has time to settle.
+			const files = this.app.vault.getMarkdownFiles();
+			if (files.length > 0) {
+				await this.runFrontmatterMigrations();
+			} else {
+				window.setTimeout(() => { void this.runFrontmatterMigrations(); }, 5000);
+			}
+		}
+	}
+
+	private async runFrontmatterMigrations(): Promise<void> {
+		try {
 			await migrateLegacyFrontmatter(this.app, this.settings, this.logger);
 			await migrateLegacyUsernames(this.app, this.settings, this.logger);
 			this.legacyMigrationVersion = LEGACY_MIGRATION_VERSION;
 			await this.saveSettings();
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			this.logger?.error('Frontmatter migrations failed', msg);
 		}
 	}
 

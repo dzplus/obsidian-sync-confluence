@@ -25,6 +25,7 @@
 	},
 	"homepage": "https://github.com/dzplus/obsidian-sync-confluence#readme",
 	"devDependencies": {
+		"@types/js-yaml": "^4.0.9",
 		"@types/markdown-it": "^14.1.2",
 		"@types/node": "^16.11.6",
 		"esbuild": "0.25.5",
@@ -32,6 +33,7 @@
 		"typescript": "^5.8.3"
 	},
 	"dependencies": {
+		"js-yaml": "^5.2.2",
 		"markdown-it": "^14.1.0",
 		"obsidian": "latest"
 	}

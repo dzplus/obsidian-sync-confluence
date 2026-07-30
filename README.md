@@ -189,7 +189,6 @@ confluence_page_id: 12345, ""
 **Heading anchors.** Same-page `[[#Heading]]` / `[text](#heading)` and cross-page `[[Other Note#Heading]]` / `[text](note.md#heading)` links are converted to native Confluence heading anchors. Heading matching is case-sensitive, following Confluence behavior.
 
 **User mentions (Server / DC only).** Write `@[[John Doe]]` to mention a Confluence user. The plugin looks up the linked note (`John Doe.md`) and reads `confluence_username` from its frontmatter. With multiple instances configured the value is a per-instance map keyed by `ConfluenceInstance.id`; each engine reads only its own slice:
->>>>>>> c43576a (feat: per-instance identity for @[[Name]] user mentions)
 
 ```yaml
 ---
