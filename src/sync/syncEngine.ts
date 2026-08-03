@@ -412,12 +412,13 @@ export class SyncEngine {
 	 * matches another instance with a longer base, we leave that URL alone
 	 * — the other engine will pick it up.
 	 *
-	 * Only `target.url` is considered. `target.parentUrl` is the parent
-	 * page reference used to create the page when no pageId exists yet —
-	 * intentionally it may belong to a different instance (e.g. one
-	 * instance's page tree is mirrored on another). Letting parentUrl
-	 * influence ownership would cause both engines to claim the same
-	 * target and write garbled content; see I1 in the final review.
+	 * `target.parentUrl` participates alongside `target.url`. A target that
+	 * has only a parentUrl (no url yet) is a not-yet-created page; the engine
+	 * that prefix-matches the parent URL is the one that creates it, so the
+	 * parentUrl defines ownership in that case. Other-instance parentUrls
+	 * (e.g. a mirrored page tree) do not flip ownership — they just mean
+	 * this target cannot be synced on this instance and should still be
+	 * left to the matching engine. See I1 in the final review.
 	 *
 	 * Without instances[] the engine syncs every target (legacy single-
 	 * instance mode).
@@ -429,6 +430,9 @@ export class SyncEngine {
 		const candidates: string[] = [];
 		if (typeof target.url === 'string' && target.url.trim().length > 0) {
 			for (const part of splitCsvUrls(target.url)) candidates.push(part);
+		}
+		if (typeof target.parentUrl === 'string' && target.parentUrl.trim().length > 0) {
+			for (const part of splitCsvUrls(target.parentUrl)) candidates.push(part);
 		}
 		for (const candidate of candidates) {
 			if (!tryParseUrl(candidate)) continue;
