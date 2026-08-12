@@ -534,7 +534,9 @@ function extractFenceBlocks(markdown: string): FenceBlock[] {
 				return l.slice(Math.min(indent, lineLen));
 			})
 			: lines.slice(start, i);
-		const content = stripped.join('\n');
+		// 末尾空行必须剥掉:渲染侧对 markdown-it 的 token.content 也做了同样的 `\n+$` normalize,
+		// 不然「闭合 fence 前带空行」的块 hash 对不上,图表会退回成代码块。
+		const content = stripped.join('\n').replace(/\n+$/, '');
 		out.push({ lang, content });
 		i += 1;
 	}
