@@ -7,6 +7,7 @@ const FIELD = {
 	PAGE_ID: 'confluence_page_id',
 	LAST_SYNCED: 'confluence_last_synced',
 	LAST_HASH: 'confluence_last_hash',
+	LAST_VERSION: 'confluence_last_version',
 	ATTACHMENTS: 'confluence_attachments',
 } as const;
 
@@ -35,6 +36,7 @@ export interface BindingPatch {
 	 * stale-snapshot race the mutex alone cannot prevent.
 	 */
 	lastHashDelta?: Record<string, Record<string, string>>;
+	lastVersionDelta?: Record<string, Record<string, number>>;
 	attachmentsDelta?: Record<string, Record<string, Record<string, AttachmentRecord>>>;
 }
 
@@ -52,12 +54,14 @@ export function readBindingFromCache(app: App, file: TFile, urlKey: string = FIE
 	const attachments = normalizeAttachments(rawAttachments);
 	const rawLastSynced = fm[FIELD.LAST_SYNCED];
 	const rawLastHash = fm[FIELD.LAST_HASH];
+	const rawLastVersion = fm[FIELD.LAST_VERSION];
 
 	return {
 		targets,
 		_formats: formats,
 		lastSynced: typeof rawLastSynced === 'string' ? rawLastSynced : undefined,
 		lastHash: readLastHashFromFrontmatter(rawLastHash),
+		lastVersion: readLastVersionFromFrontmatter(rawLastVersion),
 		attachments,
 	};
 }
@@ -103,6 +107,9 @@ export async function writeBinding(app: App, file: TFile, patch: BindingPatch, u
 			if (patch.lastSynced !== undefined) fm[FIELD.LAST_SYNCED] = patch.lastSynced;
 			if (patch.lastHashDelta !== undefined) {
 				fm[FIELD.LAST_HASH] = mergeLastHash(fm[FIELD.LAST_HASH], patch.lastHashDelta);
+			}
+			if (patch.lastVersionDelta !== undefined) {
+				fm[FIELD.LAST_VERSION] = mergeLastVersion(fm[FIELD.LAST_VERSION], patch.lastVersionDelta);
 			}
 			if (patch.attachmentsDelta !== undefined) {
 				fm[FIELD.ATTACHMENTS] = mergeAttachments(fm[FIELD.ATTACHMENTS], patch.attachmentsDelta);
@@ -274,6 +281,90 @@ export function getLastHashForTarget(
 	const raw = binding.lastHash;
 	if (raw === undefined) return undefined;
 	return raw[instanceId]?.[pageId];
+}
+
+function isReservedMapKey(key: string): boolean {
+	return key === '__proto__' || key === 'constructor' || key === 'prototype';
+}
+
+function parseVersionNumber(v: unknown): number | undefined {
+	if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return Math.floor(v);
+	if (typeof v === 'string') {
+		const n = parseInt(v, 10);
+		if (Number.isFinite(n) && n >= 0) return n;
+	}
+	return undefined;
+}
+
+function readLastVersionFromFrontmatter(
+	raw: unknown,
+): Record<string, Record<string, number>> | undefined {
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+	const result: Record<string, Record<string, number>> = {};
+	for (const [instanceId, instanceVersion] of Object.entries(raw as Record<string, unknown>)) {
+		if (isReservedMapKey(instanceId)) continue;
+		if (!instanceVersion || typeof instanceVersion !== 'object' || Array.isArray(instanceVersion)) continue;
+		const inner: Record<string, number> = {};
+		for (const [pageId, version] of Object.entries(instanceVersion as Record<string, unknown>)) {
+			if (isReservedMapKey(pageId)) continue;
+			const n = parseVersionNumber(version);
+			if (n !== undefined) inner[pageId] = n;
+		}
+		if (Object.keys(inner).length > 0) result[instanceId] = inner;
+	}
+	return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/** Last known Confluence version.number for (instanceId, pageId), if any. */
+export function getLastVersionForTarget(
+	binding: NoteBinding,
+	instanceId: string,
+	pageId: string,
+): number | undefined {
+	return binding.lastVersion?.[instanceId]?.[pageId];
+}
+
+/**
+ * Merge an engine-supplied version delta into `confluence_last_version`.
+ * Same nested shape and mutex rules as `mergeLastHash`.
+ */
+export function mergeLastVersion(
+	existing: unknown,
+	delta: Record<string, Record<string, number>>,
+): Record<string, Record<string, number>> {
+	const base: Record<string, Record<string, number>> = {};
+
+	if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+		for (const [instanceId, instanceVersion] of Object.entries(existing as Record<string, unknown>)) {
+			if (isReservedMapKey(instanceId)) continue;
+			if (!instanceVersion || typeof instanceVersion !== 'object' || Array.isArray(instanceVersion)) continue;
+			const inner: Record<string, number> = {};
+			for (const [pageId, version] of Object.entries(instanceVersion as Record<string, unknown>)) {
+				if (isReservedMapKey(pageId)) continue;
+				const n = parseVersionNumber(version);
+				if (n !== undefined) inner[pageId] = n;
+			}
+			if (Object.keys(inner).length > 0) base[instanceId] = inner;
+		}
+	}
+
+	for (const [instanceId, instanceVersion] of Object.entries(delta)) {
+		if (isReservedMapKey(instanceId)) continue;
+		if (!instanceVersion || typeof instanceVersion !== 'object') continue;
+		const target = base[instanceId] ?? {};
+		for (const [pageId, version] of Object.entries(instanceVersion)) {
+			if (isReservedMapKey(pageId)) continue;
+			const n = parseVersionNumber(version);
+			if (n !== undefined) target[pageId] = n;
+		}
+		base[instanceId] = target;
+	}
+
+	for (const instanceId of Object.keys(base)) {
+		if (Object.keys(base[instanceId]!).length === 0) delete base[instanceId];
+	}
+
+	return base;
 }
 
 /**

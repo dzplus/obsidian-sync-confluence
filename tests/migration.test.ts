@@ -32,6 +32,7 @@ const settings: SyncConfluenceSettings = {
 	showStatusBar: false,
 	showNotice: false,
 	frontmatterKey: 'cf_url',
+	checkRemoteConflicts: false,
 	uploadAttachments: true,
 	maxAttachmentSizeMB: 10,
 	defaultImageWidthPx: 192,

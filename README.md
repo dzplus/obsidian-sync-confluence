@@ -232,11 +232,11 @@ Properties panel: when a note has a `confluence_url` property, the plugin adds t
 
 **Cannot find secret vault** — requires Obsidian 1.11.4+. On older versions the plugin falls back to a plaintext field; upgrade Obsidian to use the encrypted vault.
 
-**The plugin keeps syncing the same note** — check `confluence_last_hash`; if you're editing in the Confluence UI too, every sync will overwrite Confluence and reset the hash. This plugin is **one-way (Obsidian → Confluence) by design**.
+**The plugin keeps syncing the same note** — check `confluence_last_hash`; if you're editing in the Confluence UI too, every sync will overwrite Confluence and reset the hash unless you turn on **Detect concurrent Confluence edits**. This plugin is **one-way (Obsidian → Confluence) by design**.
 
 ## 🧱 Limitations
 
-- **One-way sync only.** Edits made directly in Confluence are overwritten on the next sync.
+- **One-way sync only.** Edits made directly in Confluence are overwritten on the next sync. Turn on **Detect concurrent Confluence edits** to skip and warn instead.
 - **Desktop only.** Mobile Obsidian doesn't expose the Node `https` modules the plugin relies on for XSRF-safe uploads.
 - **No vendor macros.** Headings, lists, tables, fenced code, links, images and callouts are converted; vendor-specific macros aren't.
 - **TOC conversion is intentionally narrow.** Only a `[!summary]+ 目录` callout containing same-page heading links becomes the native Confluence TOC; manually curated ordering and inline grouping are replaced by Confluence's automatic H2-H3 hierarchy.
@@ -481,11 +481,11 @@ confluence_username:
 
 **找不到密钥库** —— 需要 Obsidian 1.11.4+。老版本会回退到明文输入；升级 Obsidian 即可走加密密钥库。
 
-**插件一直在同步同一篇笔记** —— 看 `confluence_last_hash`；如果你也在 Confluence 端直接改，每次同步都会被插件覆盖回 Obsidian 的内容，hash 会循环变化。本插件**单向（Obsidian → Confluence），不读回 Confluence 改动**。
+**插件一直在同步同一篇笔记** —— 看 `confluence_last_hash`；如果你也在 Confluence 端直接改，每次同步都会被插件覆盖回 Obsidian 的内容，hash 会循环变化。可在设置里打开 **检测 Confluence 端并发编辑**。本插件**单向（Obsidian → Confluence），不读回 Confluence 改动**。
 
 ### 🧱 限制
 
-- **仅单向同步**。在 Confluence 端直接改的内容会在下次同步时被覆盖。
+- **仅单向同步**。在 Confluence 端直接改的内容会在下次同步时被覆盖。打开 **检测 Confluence 端并发编辑** 后改为跳过并警告。
 - **仅桌面端**。Obsidian 移动端没暴露插件做 XSRF-safe 上传所需的 Node `https` 模块。
 - **不覆盖第三方 Confluence 宏**。标题、列表、表格、围栏代码、链接、图片、callout 都做了转换；vendor 自定义宏不处理。
 - **目录转换范围刻意收窄**。只有正文含同页标题链接的 `[!summary]+ 目录` callout 才会转成 Confluence 官方目录；手工排序和同一行分组会由 Confluence 自动生成的 H2-H3 层级取代。

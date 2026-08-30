@@ -69,6 +69,12 @@ export interface NoteBinding {
 	 */
 	lastHash?: Record<string, Record<string, string>>;
 	/**
+	 * Last known Confluence `version.number` per target. Shape:
+	 * `instanceId → pageId → version`. Used by opt-in conflict detection
+	 * (`checkRemoteConflicts`) to notice concurrent edits in the Confluence UI.
+	 */
+	lastVersion?: Record<string, Record<string, number>>;
+	/**
 	 * Attachment cache. Same nested shape: `instanceId → pageId → filename →
 	 * { hash, id }`. Pre-multi-instance flat form
 	 * `{ filename: { hash, id } }` was migrated by `migrateLegacyFrontmatter`.

@@ -11,7 +11,7 @@ import {
 import { AttachmentUploader } from '../confluence/attachmentUploader';
 import { IMermaidRenderer, KrokiMermaidRenderer, ObsidianMermaidRenderer } from '../confluence/mermaidRenderer';
 import { PlantUmlRenderer } from '../confluence/plantUmlRenderer';
-import { readBindingFromCache, writeBinding, getLastHashForTarget, TargetBindingPatch } from '../frontmatter/handler';
+import { readBindingFromCache, writeBinding, getLastHashForTarget, getLastVersionForTarget, TargetBindingPatch } from '../frontmatter/handler';
 import { scanBoundNotes } from './noteScanner';
 import { Logger } from '../utils/logger';
 import { SyncConfluenceSettings } from '../settings';
@@ -54,6 +54,8 @@ interface TargetSyncSuccess {
 	skippedAttachments: number;
 	failedAttachments: number;
 	attachments?: Record<string, AttachmentRecord>;
+	/** Confluence version.number after a successful push; omitted on hash-match skip. */
+	remoteVersion?: number;
 }
 
 interface TargetSyncFailureResult {
@@ -293,6 +295,7 @@ export class SyncEngine {
 			if (successful.length > 0) {
 				const targetUpdates = binding.targets.map(() => ({}));
 				const updatedHashEntries: Array<{ pageId: string; hash: string }> = [];
+				const updatedVersionEntries: Array<{ pageId: string; version: number }> = [];
 				const updatedAttachmentEntries: Array<{ pageId: string; attachments: Record<string, AttachmentRecord> }> = [];
 				for (const target of successful) {
 					// Only update targetInfo when something actually changed for
@@ -306,11 +309,15 @@ export class SyncEngine {
 						};
 						updatedHashEntries.push({ pageId: target.pageId, hash: contentHash });
 					}
+					if (target.remoteVersion !== undefined) {
+						updatedVersionEntries.push({ pageId: target.pageId, version: target.remoteVersion });
+					}
 					if (target.attachments) {
 						updatedAttachmentEntries.push({ pageId: target.pageId, attachments: target.attachments });
 					}
 				}
 				const anyUpdated = updatedHashEntries.length > 0;
+				const anyVersionUpdates = updatedVersionEntries.length > 0;
 				const anyAttachmentUpdates = updatedAttachmentEntries.length > 0;
 				// Did any non-foreign target touch confluence_url / parent_url /
 				// pageId? (freshly created page → new id; user reassigned pageId
@@ -320,6 +327,7 @@ export class SyncEngine {
 					Object.keys(u).length > 0,
 				);
 				const needsWriteback = anyUpdated
+					|| anyVersionUpdates
 					|| anyAttachmentUpdates
 					|| anyTargetInfoChanged;
 				if (!needsWriteback) {
@@ -335,6 +343,11 @@ export class SyncEngine {
 						const myHash: Record<string, string> = {};
 						for (const e of updatedHashEntries) myHash[e.pageId] = e.hash;
 						patch.lastHashDelta = { [instanceId]: myHash };
+					}
+					if (anyVersionUpdates) {
+						const myVersion: Record<string, number> = {};
+						for (const e of updatedVersionEntries) myVersion[e.pageId] = e.version;
+						patch.lastVersionDelta = { [instanceId]: myVersion };
 					}
 					if (anyAttachmentUpdates) {
 						const myAttachments: Record<string, Record<string, AttachmentRecord>> = {};
@@ -610,6 +623,17 @@ export class SyncEngine {
 			}
 
 			const instanceId = this.deps.instance.id;
+			const page = await this.deps.api.getPage(pageId);
+			if (this.deps.settings.checkRemoteConflicts && !createdNewPage) {
+				const storedVersion = getLastVersionForTarget(binding, instanceId, pageId);
+				if (storedVersion !== undefined && page.version > storedVersion) {
+					throw new Error(t('notice.remoteConflict', {
+						local: String(storedVersion),
+						remote: String(page.version),
+					}));
+				}
+			}
+
 			// Attachment IDs are scoped per-Confluence-installation, so the
 			// same filename uploaded to two instances gets two independent
 			// attachment records. Reading back by [instanceId][pageId] is
@@ -632,8 +656,7 @@ export class SyncEngine {
 				if (rec) plantUmlRecords[r.block.filename] = rec;
 			}
 
-			const page = await this.deps.api.getPage(pageId);
-			await this.updatePageWithRetry(pageId, file.basename, storageXhtml, page.version, file.path);
+			const writtenVersion = await this.updatePageWithRetry(pageId, file.basename, storageXhtml, page.version, file.path);
 
 			const mergedAttachments: Record<string, AttachmentRecord> = {
 				...previousAttachments,
@@ -661,6 +684,7 @@ export class SyncEngine {
 				skippedAttachments: attachmentResult.skipped,
 				failedAttachments: attachmentResult.failed,
 				attachments: mergedAttachments,
+				remoteVersion: writtenVersion,
 			};
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
@@ -674,15 +698,19 @@ export class SyncEngine {
 		storageXhtml: string,
 		currentVersion: number,
 		path: string,
-	): Promise<void> {
+	): Promise<number> {
 		try {
 			await this.deps.api.updatePage(pageId, {
 				title,
 				storageXhtml,
 				newVersion: currentVersion + 1,
 			});
+			return currentVersion + 1;
 		} catch (e) {
 			if (e instanceof ConfluenceApiError && e.code === 'version_conflict') {
+				if (this.deps.settings.checkRemoteConflicts) {
+					throw new Error(t('notice.remoteConflict409'));
+				}
 				this.deps.logger.warn(`版本冲突,重新拉取后重试: ${path}`);
 				const refreshed = await this.deps.api.getPage(pageId);
 				await this.deps.api.updatePage(pageId, {
@@ -690,7 +718,7 @@ export class SyncEngine {
 					storageXhtml,
 					newVersion: refreshed.version + 1,
 				});
-				return;
+				return refreshed.version + 1;
 			}
 			throw e;
 		}

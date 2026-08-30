@@ -34,6 +34,8 @@ export const en = {
 		unmatchedUrl: 'No matching Confluence instance found for URL: {url}',
 		urlDoesNotMatchInstance: 'URL does not match the selected instance ({instance}): {url}',
 		instanceSummary: '{name}: updated {updated} / skipped {skipped} / failed {failed}',
+		remoteConflict: 'Remote Confluence page was edited since last sync (local version {local}, remote {remote}). Enable overwrite by turning off “Detect concurrent Confluence edits”, or copy the remote changes first.',
+		remoteConflict409: 'Remote Confluence page changed during this sync (HTTP 409). Not overwriting because conflict detection is on.',
 		// CreateBoundNoteModal
 		pathRequired: 'Please fill in the note path',
 		urlRequired: 'Please fill in the Confluence URL',
@@ -162,6 +164,10 @@ export const en = {
 		syncOnStartup: {
 			name: 'Sync once on startup',
 			desc: 'Run a full sync 5 seconds after Obsidian launches',
+		},
+		checkRemoteConflicts: {
+			name: 'Detect concurrent Confluence edits',
+			desc: 'Off by default (current behaviour: local notes overwrite the Confluence page). When on, skip a page and warn if someone edited it in Confluence since the last successful push.',
 		},
 		syncNow: 'Sync all now',
 		scanFolders: {

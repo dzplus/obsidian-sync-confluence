@@ -33,6 +33,8 @@ export const zh: Messages = {
 		unmatchedUrl: '没有找到匹配的 Confluence 实例,URL: {url}',
 		urlDoesNotMatchInstance: 'URL 与所选实例不匹配 ({instance}): {url}',
 		instanceSummary: '{name}: 更新 {updated} / 跳过 {skipped} / 失败 {failed}',
+		remoteConflict: 'Confluence 页面自上次同步后被改过(本地记录版本 {local},远端 {remote})。若要覆盖,请关闭“检测 Confluence 端并发编辑”,或先把远端改动拷回来。',
+		remoteConflict409: '同步过程中 Confluence 页面被改过(HTTP 409)。因已开启冲突检测,本次不覆盖。',
 		pathRequired: '请填写笔记路径',
 		urlRequired: '请填写 Confluence URL',
 		urlCannotParsePageId: '无法从 URL 解析 page ID',
@@ -154,6 +156,10 @@ export const zh: Messages = {
 		syncOnStartup: {
 			name: '启动时同步一次',
 			desc: 'Obsidian 启动 5 秒后自动跑一次全量同步',
+		},
+		checkRemoteConflicts: {
+			name: '检测 Confluence 端并发编辑',
+			desc: '默认关闭(保持现有行为:本地笔记覆盖 Confluence 页面)。开启后,若上次推送后有人在 Confluence 里改过该页,则跳过并警告,不覆盖。',
 		},
 		syncNow: '立即同步全部',
 		scanFolders: {
