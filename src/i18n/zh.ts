@@ -106,6 +106,7 @@ export const zh: Messages = {
 		baseUrl: {
 			name: 'Confluence base URL',
 			desc: 'Cloud 形如 https://xxx.atlassian.net/wiki;Server 通常无 /wiki 后缀,如 https://confluence.your-corp.com',
+			httpWarning: '该 URL 使用 http://。API token 会以明文发送。除非这是受信任的内网 Server,请改用 https://。',
 		},
 		authType: {
 			name: '认证方式',

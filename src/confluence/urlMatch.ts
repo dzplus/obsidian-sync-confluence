@@ -50,6 +50,16 @@ export function urlMatchesBaseUrl(targetUrl: string, baseUrl: string): boolean {
 }
 
 /**
+ * True when `raw` is an `http:` URL (credentials would be sent in
+ * cleartext). Invalid / empty / https URLs return false.
+ */
+export function isCleartextHttpUrl(raw: string): boolean {
+	const parsed = tryParseUrl(raw);
+	if (parsed) return parsed.protocol === 'http:';
+	return /^http:\/\//i.test(raw.trim());
+}
+
+/**
  * Partition a string of comma-separated URLs into an array of trimmed
  * non-empty segments. Accepts both `,` and `，` (Chinese comma) as
  * separators, mirroring the CSV splitter used for `confluence_url` and

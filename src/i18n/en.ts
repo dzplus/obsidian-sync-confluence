@@ -114,6 +114,7 @@ export const en = {
 		baseUrl: {
 			name: 'Confluence base URL',
 			desc: 'Cloud looks like https://xxx.atlassian.net/wiki; Server usually has no /wiki suffix, e.g. https://confluence.your-corp.com',
+			httpWarning: 'This URL uses http://. The API token will be sent in cleartext. Prefer https:// unless this is a trusted intranet Server.',
 		},
 		authType: {
 			name: 'Authentication type',

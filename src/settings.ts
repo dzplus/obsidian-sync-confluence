@@ -4,6 +4,7 @@ import type SyncConfluencePlugin from './main';
 import { ConfluenceApi, ConfluenceAuthType } from './confluence/api';
 import { t } from './i18n';
 import { ConfluenceInstance } from './types';
+import { isCleartextHttpUrl } from './confluence/urlMatch';
 
 export interface SyncConfluenceSettings {
 	// ========== Multi-instance configuration ==========
@@ -670,5 +671,8 @@ export class SyncConfluenceSettingTab extends PluginSettingTab {
 		);
 		if (nameDup) host.createDiv({ cls: 'sync-confluence-error', text: t('settings.instances.duplicateName') });
 		if (urlDup) host.createDiv({ cls: 'sync-confluence-error', text: t('settings.instances.duplicateBaseUrl') });
+		if (isCleartextHttpUrl(inst.baseUrl)) {
+			host.createDiv({ cls: 'sync-confluence-http-warning', text: t('settings.baseUrl.httpWarning') });
+		}
 	}
 }

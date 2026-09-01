@@ -171,7 +171,8 @@ Sync Confluence 插件样式
     margin-top: 4px;
 }
 
-.sync-confluence-privacy-warning {
+.sync-confluence-http-warning {
     color: var(--text-warning);
-    margin: 4px 0 12px 0;
+    font-size: var(--font-ui-small);
+    margin-top: 4px;
 }

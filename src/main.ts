@@ -23,7 +23,7 @@ import { StatusBarManager } from './ui/statusBar';
 import { PropertyActionsManager } from './ui/propertyActions';
 import { CreateBoundNoteModal } from './ui/createBoundNoteModal';
 import { frontmatterHasBinding, insertTemplateFrontmatter, type Frontmatter } from './frontmatter/handler';
-import { extractFirstTargetUrl } from './confluence/urlMatch';
+import { extractFirstTargetUrl, isCleartextHttpUrl } from './confluence/urlMatch';
 import { LEGACY_MIGRATION_VERSION, migrateLegacySettings, migrateLegacyFrontmatter, migrateLegacyUsernames } from './migration';
 import {
 	SyncStatus,
@@ -63,6 +63,8 @@ export default class SyncConfluencePlugin extends Plugin {
 	private engines: Map<string, SyncEngine> = new Map();
 	private syncIntervalToken: number | null = null;
 	private startupTimeoutToken: number | null = null;
+	/** Log the cleartext-HTTP warning once per instance URL per session. */
+	private httpWarnedKeys = new Set<string>();
 	/**
 	 * Tracks the last plugin version that ran both `migrateLegacySettings`
 	 * and `migrateLegacyFrontmatter`. When this mismatches
@@ -201,6 +203,13 @@ export default class SyncConfluencePlugin extends Plugin {
 			const needsUsername = inst.authType === 'basic';
 			if (!inst.baseUrl || (needsUsername && !inst.username) || !tokenValue) {
 				continue;
+			}
+			if (isCleartextHttpUrl(inst.baseUrl)) {
+				const warnKey = `${inst.id}:${inst.baseUrl}`;
+				if (!this.httpWarnedKeys.has(warnKey)) {
+					this.httpWarnedKeys.add(warnKey);
+					this.logger.warn(t('settings.baseUrl.httpWarning'), inst.name);
+				}
 			}
 			const api = new ConfluenceApi({
 				baseUrl: inst.baseUrl,
