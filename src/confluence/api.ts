@@ -147,7 +147,7 @@ export class ConfluenceApi {
 		if (status < 200 || status >= 300) {
 			const code = classifyError(status);
 			const details = truncate(text, 500);
-			throw new ConfluenceApiError(status, code, buildErrorMessage('POST', url, status, details), details);
+			throw new ConfluenceApiError(status, code, buildErrorMessage('POST', url, status), details);
 		}
 		const data = JSON.parse(text) as {
 			id: string;
@@ -250,7 +250,7 @@ export class ConfluenceApi {
 		}
 		const code = classifyError(status);
 		const details = truncate(text, 500);
-		throw new ConfluenceApiError(status, code, buildErrorMessage('POST', url, status, details), details);
+		throw new ConfluenceApiError(status, code, buildErrorMessage('POST', url, status), details);
 	}
 
 	private async request(opts: {
@@ -287,7 +287,7 @@ export class ConfluenceApi {
 
 		const code = classifyError(res.status);
 		const details = truncate(safeText(res), 500);
-		const message = buildErrorMessage(opts.method, opts.url, res.status, details);
+		const message = buildErrorMessage(opts.method, opts.url, res.status);
 		throw new ConfluenceApiError(res.status, code, message, details);
 	}
 }
@@ -309,9 +309,17 @@ function truncate(s: string, max: number): string {
 	return s.slice(0, max) + '...';
 }
 
-function buildErrorMessage(method: string, url: string, status: number, details: string): string {
+function buildErrorMessage(method: string, url: string, status: number): string {
 	const path = url.replace(/^https?:\/\/[^/]+/, '');
-	return `Confluence ${method} ${path} → ${status}${details ? ': ' + details : ''}`;
+	return `Confluence ${method} ${path} → ${status}`;
+}
+
+/** User-facing `message` plus optional response body for the logger. */
+export function formatApiErrorForLog(e: unknown): string {
+	if (e instanceof ConfluenceApiError) {
+		return e.details ? `${e.message}\n${e.details}` : e.message;
+	}
+	return e instanceof Error ? e.message : String(e);
 }
 
 

@@ -417,8 +417,10 @@ export class SyncConfluenceSettingTab extends PluginSettingTab {
 			};
 			setting.addText((tx) => {
 				tx.setPlaceholder(t('settings.token.placeholderPasteToken'))
-					.setValue('')
-					.onChange((v) => {
+					.setValue('');
+				tx.inputEl.type = 'password';
+				tx.inputEl.autocomplete = 'off';
+				tx.onChange((v) => {
 						pendingValue = v;
 						if (saveTimer !== null) window.clearTimeout(saveTimer);
 						saveTimer = window.setTimeout(() => {

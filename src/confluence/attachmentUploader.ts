@@ -1,5 +1,5 @@
 import type { App, TFile } from 'obsidian';
-import { ConfluenceApi } from './api';
+import { ConfluenceApi, formatApiErrorForLog } from './api';
 import { AttachmentRecord, AttachmentRef } from '../types';
 import { sha1Hex } from '../utils/hash';
 import { Logger } from '../utils/logger';
@@ -104,8 +104,7 @@ export class AttachmentUploader {
 				result.uploaded += 1;
 				this.logger.info(`附件已上传: ${filename}`, `${(bytes.byteLength / 1024).toFixed(1)} KB`);
 			} catch (e) {
-				const msg = e instanceof Error ? e.message : String(e);
-				this.logger.error(`附件上传失败: ${filename}`, msg);
+				this.logger.error(`附件上传失败: ${filename}`, formatApiErrorForLog(e));
 				result.failed += 1;
 			}
 		}
@@ -130,8 +129,7 @@ export class AttachmentUploader {
 			const record = await this.upload(pageId, filename, data, mime, prev?.id);
 			return { hash, id: record.id };
 		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			this.logger.error(`图表附件上传失败: ${filename}`, msg);
+			this.logger.error(`图表附件上传失败: ${filename}`, formatApiErrorForLog(e));
 			return null;
 		}
 	}

@@ -1,0 +1,7 @@
+[test]
+# Installs a complete `obsidian` stub before any test file runs. It has to
+# happen here rather than inside a test file: Bun freezes the module's export
+# shape at first instantiation, so whichever test file gets there first would
+# otherwise decide which exports exist for the whole run. See
+# tests/setup/obsidian-stub.ts.
+preload = ["./tests/setup/obsidian-stub.ts"]

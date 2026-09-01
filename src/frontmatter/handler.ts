@@ -16,6 +16,11 @@ const FIELD = {
  */
 export type Frontmatter = Record<string, unknown>;
 
+/** Keys that must never be copied from untrusted YAML/frontmatter into our maps. */
+export function isUnsafeObjectKey(key: string): boolean {
+	return key === '__proto__' || key === 'constructor' || key === 'prototype';
+}
+
 export interface TargetBindingPatch {
 	parentUrl?: string;
 	url?: string;
@@ -250,9 +255,11 @@ function readLastHashFromFrontmatter(
 	if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
 		const result: Record<string, Record<string, string>> = {};
 		for (const [instanceId, instanceHash] of Object.entries(raw as Record<string, unknown>)) {
+			if (isUnsafeObjectKey(instanceId)) continue;
 			if (!instanceHash || typeof instanceHash !== 'object' || Array.isArray(instanceHash)) continue;
 			const inner: Record<string, string> = {};
 			for (const [pageId, hash] of Object.entries(instanceHash as Record<string, unknown>)) {
+				if (isUnsafeObjectKey(pageId)) continue;
 				if (typeof hash === 'string') inner[pageId] = hash;
 			}
 			if (Object.keys(inner).length > 0) result[instanceId] = inner;
@@ -291,9 +298,11 @@ export function mergeLastHash(
 
 	if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
 		for (const [instanceId, instanceHash] of Object.entries(existing as Record<string, unknown>)) {
+			if (isUnsafeObjectKey(instanceId)) continue;
 			if (!instanceHash || typeof instanceHash !== 'object' || Array.isArray(instanceHash)) continue;
 			const inner: Record<string, string> = {};
 			for (const [pageId, hash] of Object.entries(instanceHash as Record<string, unknown>)) {
+				if (isUnsafeObjectKey(pageId)) continue;
 				if (typeof hash === 'string') inner[pageId] = hash;
 			}
 			if (Object.keys(inner).length > 0) base[instanceId] = inner;
@@ -301,9 +310,11 @@ export function mergeLastHash(
 	}
 
 	for (const [instanceId, instanceHash] of Object.entries(delta)) {
+		if (isUnsafeObjectKey(instanceId)) continue;
 		if (!instanceHash || typeof instanceHash !== 'object') continue;
 		const target = base[instanceId] ?? {};
 		for (const [pageId, hash] of Object.entries(instanceHash)) {
+			if (isUnsafeObjectKey(pageId)) continue;
 			if (typeof hash === 'string') target[pageId] = hash;
 		}
 		base[instanceId] = target;
@@ -332,11 +343,13 @@ export function mergeAttachments(
 
 	if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
 		for (const [instanceId, pageBucket] of Object.entries(existing as Record<string, unknown>)) {
+			if (isUnsafeObjectKey(instanceId)) continue;
 			if (!pageBucket || typeof pageBucket !== 'object' || Array.isArray(pageBucket)) continue;
 			const inner: Record<string, Record<string, AttachmentRecord>> = {};
 			for (const [pageId, filenameBucket] of Object.entries(pageBucket as Record<string, unknown>)) {
+				if (isUnsafeObjectKey(pageId)) continue;
 				if (isFlatAttachmentMap(filenameBucket)) {
-					inner[pageId] = { ...filenameBucket };
+					inner[pageId] = copyFlatAttachmentMap(filenameBucket);
 				}
 			}
 			if (Object.keys(inner).length > 0) base[instanceId] = inner;
@@ -344,11 +357,13 @@ export function mergeAttachments(
 	}
 
 	for (const [instanceId, pageBucket] of Object.entries(delta)) {
+		if (isUnsafeObjectKey(instanceId)) continue;
 		if (!pageBucket || typeof pageBucket !== 'object') continue;
 		const target = base[instanceId] ?? {};
 		for (const [pageId, filenameBucket] of Object.entries(pageBucket)) {
+			if (isUnsafeObjectKey(pageId)) continue;
 			if (isFlatAttachmentMap(filenameBucket)) {
-				target[pageId] = { ...filenameBucket };
+				target[pageId] = copyFlatAttachmentMap(filenameBucket);
 			}
 		}
 		base[instanceId] = target;
@@ -364,12 +379,22 @@ export function mergeAttachments(
 function isFlatAttachmentMap(v: unknown): v is Record<string, AttachmentRecord> {
 	if (!v || typeof v !== 'object') return false;
 	for (const k of Object.keys(v as Record<string, unknown>)) {
+		if (isUnsafeObjectKey(k)) continue;
 		const entry = (v as Record<string, unknown>)[k];
 		if (!entry || typeof entry !== 'object') return false;
 		const e = entry as Record<string, unknown>;
 		if (typeof e.hash !== 'string' || typeof e.id !== 'string') return false;
 	}
 	return true;
+}
+
+function copyFlatAttachmentMap(v: Record<string, AttachmentRecord>): Record<string, AttachmentRecord> {
+	const out: Record<string, AttachmentRecord> = {};
+	for (const [k, rec] of Object.entries(v)) {
+		if (isUnsafeObjectKey(k)) continue;
+		out[k] = rec;
+	}
+	return out;
 }
 
 /**
@@ -381,9 +406,11 @@ function isTripleNestedAttachmentMap(
 ): v is Record<string, Record<string, Record<string, AttachmentRecord>>> {
 	if (!v || typeof v !== 'object') return false;
 	for (const instanceId of Object.keys(v as Record<string, unknown>)) {
+		if (isUnsafeObjectKey(instanceId)) continue;
 		const instanceBucket = (v as Record<string, unknown>)[instanceId];
 		if (!instanceBucket || typeof instanceBucket !== 'object') return false;
 		for (const pageId of Object.keys(instanceBucket as Record<string, unknown>)) {
+			if (isUnsafeObjectKey(pageId)) continue;
 			const pageBucket = (instanceBucket as Record<string, unknown>)[pageId];
 			if (!isFlatAttachmentMap(pageBucket)) return false;
 		}

@@ -14,7 +14,7 @@ import * as yaml from 'js-yaml';
 import type { SyncConfluenceSettings } from './settings';
 import type { AttachmentRecord, PerInstanceUsernameMap, SyncTarget } from './types';
 import { InstanceResolver } from './sync/instanceResolver';
-import { readTargetsFromFrontmatter } from './frontmatter/handler';
+import { readTargetsFromFrontmatter, isUnsafeObjectKey } from './frontmatter/handler';
 
 /**
  * Bump whenever the plugin's config or frontmatter shape changes in a way
@@ -388,13 +388,15 @@ function migrateAttachmentCache(
 		pageId: string,
 		attachments: Record<string, AttachmentRecord>,
 	): void => {
+		if (isUnsafeObjectKey(instanceId) || isUnsafeObjectKey(pageId)) return;
 		const instanceBucket = nested[instanceId] ?? {};
-		instanceBucket[pageId] = { ...attachments };
+		instanceBucket[pageId] = copySafeAttachmentRecords(attachments);
 		nested[instanceId] = instanceBucket;
 	};
 
 	if (isLegacyPageAttachmentShape(value)) {
 		for (const [pageId, attachments] of Object.entries(value)) {
+			if (isUnsafeObjectKey(pageId)) continue;
 			const owners = new Set(
 				routes
 					.filter((route) => route.target.pageId.trim() === pageId)
@@ -412,6 +414,15 @@ function migrateAttachmentCache(
 		put(firstRoute?.instanceId ?? fallbackInstanceId, pageId, value);
 	}
 	return nested;
+}
+
+function copySafeAttachmentRecords(attachments: Record<string, AttachmentRecord>): Record<string, AttachmentRecord> {
+	const out: Record<string, AttachmentRecord> = {};
+	for (const [k, rec] of Object.entries(attachments)) {
+		if (isUnsafeObjectKey(k)) continue;
+		out[k] = rec;
+	}
+	return out;
 }
 
 /**
