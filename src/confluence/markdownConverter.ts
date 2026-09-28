@@ -168,21 +168,30 @@ export class MarkdownConverter {
 			refs.push({ rawMatch: m[0], linkpath, alt, tfile, filename });
 		}
 
-		// 标准 markdown 图片:![alt](path "title")
-		// 仅相对路径或不带 scheme 的 URL 视为本地附件
-		const imgRe = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
-		while ((m = imgRe.exec(masked)) !== null) {
-			const alt = m[1] ?? '';
-			const path = m[2]!;
-			if (/^[a-z][a-z0-9+\-.]*:\/\//i.test(path) || path.startsWith('data:')) continue;
-			if (path.includes('#')) continue;
+		// 标准 markdown 图片:![alt](path "title")。
+		// Markdown 允许把 destination 写成 <path with spaces>,所以先处理
+		// angle-bracket 形式;普通形式保持原有的无空格路径规则。
+		const addMarkdownImageRef = (rawMatch: string, alt: string, rawPath: string): void => {
+			const path = unwrapAngleImageDestination(rawPath);
+			if (!path || /^[a-z][a-z0-9+\-.]*:\/\//i.test(path) || path.startsWith('data:')) return;
+			if (path.includes('#')) return;
 			const decoded = tryDecode(path);
 			const tfile = resolveAttachmentFile(this.app, decoded, sourcePath);
 			const filename = tfile?.name ?? decoded.split('/').pop() ?? decoded;
 			const key = `img:${filename}`;
-			if (seen.has(key)) continue;
+			if (seen.has(key)) return;
 			seen.add(key);
-			refs.push({ rawMatch: m[0], linkpath: decoded, alt, tfile, filename });
+			refs.push({ rawMatch, linkpath: decoded, alt, tfile, filename });
+		};
+
+		const angleImgRe = /!\[([^\]]*)\]\(<([^>\n]+)>(?:\s+"[^"]*")?\)/g;
+		while ((m = angleImgRe.exec(masked)) !== null) {
+			addMarkdownImageRef(m[0], m[1] ?? '', m[2]!);
+		}
+
+		const imgRe = /!\[([^\]]*)\]\((?!<)([^)\s]+)(?:\s+"[^"]*")?\)/g;
+		while ((m = imgRe.exec(masked)) !== null) {
+			addMarkdownImageRef(m[0], m[1] ?? '', m[2]!);
 		}
 
 		return refs;
@@ -675,4 +684,12 @@ function cdataSafe(s: string): string {
 
 function tryDecode(s: string): string {
 	try { return decodeURIComponent(s); } catch { return s; }
+}
+
+function unwrapAngleImageDestination(s: string): string {
+	const trimmed = s.trim();
+	if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+		return trimmed.slice(1, -1);
+	}
+	return trimmed;
 }

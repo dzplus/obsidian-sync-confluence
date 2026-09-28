@@ -592,10 +592,27 @@ export class SyncEngine {
 				this.deps.logger.info(`已创建子页面 ${created.id}: ${created.webUrl}`);
 			}
 
+			const instanceId = this.deps.instance.id;
+			// Attachment IDs are scoped per-Confluence-installation, so the
+			// same filename uploaded to two instances gets two independent
+			// attachment records. Reading back by [instanceId][pageId] is
+			// intentional — a cross-instance lookup would return foreign
+			// attachment IDs that aren't valid on this instance.
+			const previousAttachments = binding.attachments?.[instanceId]?.[pageId] ?? {};
+			// A content-hash hit must not hide an attachment that was never cached.
+			// This is important when upgrading from a version that failed to parse
+			// angle-bracket image destinations: the page hash is unchanged, but the
+			// newly discovered attachment still needs its first upload.
+			const regularAttachmentsReady = !this.deps.settings.uploadAttachments
+				|| refs.attachments.every((ref) => Boolean(ref.tfile && previousAttachments[ref.filename]));
+			const renderedAttachmentsReady = [...mermaidRendered, ...plantUmlRendered]
+				.every((rendered) => Boolean(previousAttachments[rendered.block.filename]));
 			if (!createdNewPage
-				&& getLastHashForTarget(binding, this.deps.instance.id, pageId) === contentHash
+				&& getLastHashForTarget(binding, instanceId, pageId) === contentHash
 				&& target.pageId === pageId
-				&& target.url.trim().length > 0) {
+				&& target.url.trim().length > 0
+				&& regularAttachmentsReady
+				&& renderedAttachmentsReady) {
 				return {
 					index,
 					parentUrl: target.parentUrl,
@@ -609,27 +626,31 @@ export class SyncEngine {
 				};
 			}
 
-			const instanceId = this.deps.instance.id;
-			// Attachment IDs are scoped per-Confluence-installation, so the
-			// same filename uploaded to two instances gets two independent
-			// attachment records. Reading back by [instanceId][pageId] is
-			// intentional — a cross-instance lookup would return foreign
-			// attachment IDs that aren't valid on this instance.
-			const previousAttachments = binding.attachments?.[instanceId]?.[pageId] ?? {};
 			const attachmentResult = this.deps.settings.uploadAttachments
 				? await this.uploader.syncAttachments(pageId, refs.attachments, previousAttachments)
-				: { map: {} as Record<string, AttachmentRecord>, uploaded: 0, skipped: 0, failed: 0 };
+				: { map: {} as Record<string, AttachmentRecord>, uploaded: 0, skipped: 0, failed: 0, unavailable: [] as string[] };
 
 			const mermaidRecords: Record<string, AttachmentRecord> = {};
+			const unavailableDiagramFilenames: string[] = [];
 			for (const r of mermaidRendered) {
 				const rec = await this.uploader.uploadBytes(pageId, r.block.filename, r.png, previousAttachments);
 				if (rec) mermaidRecords[r.block.filename] = rec;
+				else unavailableDiagramFilenames.push(r.block.filename);
 			}
 
 			const plantUmlRecords: Record<string, AttachmentRecord> = {};
 			for (const r of plantUmlRendered) {
 				const rec = await this.uploader.uploadBytes(pageId, r.block.filename, r.png, previousAttachments);
 				if (rec) plantUmlRecords[r.block.filename] = rec;
+				else unavailableDiagramFilenames.push(r.block.filename);
+			}
+
+			const unavailableAttachments = [
+				...attachmentResult.unavailable,
+				...unavailableDiagramFilenames,
+			];
+			if (unavailableAttachments.length > 0) {
+				throw new Error(`Attachments unavailable: ${unavailableAttachments.join(', ')}`);
 			}
 
 			const page = await this.deps.api.getPage(pageId);
@@ -663,6 +684,22 @@ export class SyncEngine {
 				attachments: mergedAttachments,
 			};
 		} catch (e) {
+			if (createdNewPage && pageId && url) {
+				try {
+					const targetUpdates = binding.targets.map((_, targetIndex) => targetIndex === index
+						? { parentUrl: target.parentUrl ?? '', url, pageId }
+						: {});
+					await writeBinding(this.deps.app, file, {
+						targetUpdates,
+						_formats: binding._formats,
+					}, this.deps.settings.frontmatterKey);
+				} catch (persistError) {
+					this.deps.logger.warn(
+						`Failed to persist newly created page binding: ${file.path}`,
+						persistError instanceof Error ? persistError.message : String(persistError),
+					);
+				}
+			}
 			const msg = e instanceof Error ? e.message : String(e);
 			throw new TargetSyncFailure(msg, index, target, pageId, url);
 		}

@@ -14,6 +14,8 @@ export interface AttachmentUploadResult {
 	uploaded: number;
 	skipped: number;
 	failed: number;
+	/** 引用存在但本次没有可用的 Confluence attachment 记录的文件名 */
+	unavailable: string[];
 }
 
 /** 已知扩展名 → MIME。Confluence 接受任何 MIME,但显式声明可避免猜错。 */
@@ -56,13 +58,14 @@ export class AttachmentUploader {
 		refs: AttachmentRef[],
 		previous: Record<string, AttachmentRecord> = {},
 	): Promise<AttachmentUploadResult> {
-		const result: AttachmentUploadResult = { map: {}, uploaded: 0, skipped: 0, failed: 0 };
+		const result: AttachmentUploadResult = { map: {}, uploaded: 0, skipped: 0, failed: 0, unavailable: [] };
 		const seen = new Set<string>();
 
 		for (const ref of refs) {
 			if (!ref.tfile) {
 				this.logger.warn(`附件引用无法解析: ${ref.linkpath}`);
 				result.failed += 1;
+				result.unavailable.push(ref.filename);
 				continue;
 			}
 			const filename = ref.filename;
@@ -77,6 +80,7 @@ export class AttachmentUploader {
 						`${(statSize / 1024 / 1024).toFixed(2)} MB > ${(this.opts.maxSizeBytes / 1024 / 1024).toFixed(2)} MB`,
 					);
 					result.skipped += 1;
+					result.unavailable.push(filename);
 					continue;
 				}
 
@@ -87,6 +91,7 @@ export class AttachmentUploader {
 						`${(bytes.byteLength / 1024 / 1024).toFixed(2)} MB > ${(this.opts.maxSizeBytes / 1024 / 1024).toFixed(2)} MB`,
 					);
 					result.skipped += 1;
+					result.unavailable.push(filename);
 					continue;
 				}
 
@@ -107,6 +112,7 @@ export class AttachmentUploader {
 				const msg = e instanceof Error ? e.message : String(e);
 				this.logger.error(`附件上传失败: ${filename}`, msg);
 				result.failed += 1;
+				result.unavailable.push(filename);
 			}
 		}
 
