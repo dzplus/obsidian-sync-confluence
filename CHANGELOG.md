@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Changed
 
+- TOC callouts also accept English titles `Contents`, `Table of Contents`, and `TOC` (case-insensitive) in addition to `目录`. Same-page heading-link requirement unchanged; other summary callouts stay unchanged.
 - Hashes, attachment caches, and mention usernames now have per-instance slices. One-shot migration preserves both the old flat attachment cache and the page-ID-bucketed shape used by 0.3.8.
 - Existing targets use `confluence_url` as their authoritative route; `confluence_parent_url` participates only before a child page is created.
 

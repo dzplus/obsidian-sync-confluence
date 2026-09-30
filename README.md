@@ -30,7 +30,7 @@
 - **Cloud + Server / Data Center** — Basic auth (email + API token) for Atlassian Cloud, Bearer (Personal Access Token) for Server 7.9+ / DC.
 - **Content-hash skip** — unchanged notes are not re-pushed; bandwidth and audit log stay clean.
 - **Local attachments auto-upload** — `![[image.png]]` embeds become Confluence attachments; regular images display at a configurable width (192px by default) without resizing the uploaded source.
-- **Native Confluence TOC** — keep a hand-written `[!summary]+ 目录` callout in Obsidian; on sync it becomes Confluence's official H2-H3 table-of-contents macro.
+- **Native Confluence TOC** — keep a hand-written `[!summary]+` callout titled `目录`, `Contents`, `Table of Contents`, or `TOC` in Obsidian; on sync it becomes Confluence's official H2-H3 table-of-contents macro.
 - **Auto-create child pages** — set `confluence_parent_url` and the first sync creates the page, then writes the URL back.
 - **Mermaid / PlantUML pre-render** — diagrams are rendered to an image attachment before sync. Mermaid defaults to the in-process Obsidian engine (SVG, pixel-identical to your preview, no network). A kroki HTTP service (PNG, max compatibility) is optional.
 - **Many triggers** — ribbon icon, command palette, editor / file-tree right-click, scheduled timer.
@@ -239,7 +239,7 @@ Properties panel: when a note has a `confluence_url` property, the plugin adds t
 - **One-way sync only.** Edits made directly in Confluence are overwritten on the next sync.
 - **Desktop only.** Mobile Obsidian doesn't expose the Node `https` modules the plugin relies on for XSRF-safe uploads.
 - **No vendor macros.** Headings, lists, tables, fenced code, links, images and callouts are converted; vendor-specific macros aren't.
-- **TOC conversion is intentionally narrow.** Only a `[!summary]+ 目录` callout containing same-page heading links becomes the native Confluence TOC; manually curated ordering and inline grouping are replaced by Confluence's automatic H2-H3 hierarchy.
+- **TOC conversion is intentionally narrow.** Only a `[!summary]+` callout titled `目录`, `Contents`, `Table of Contents`, or `TOC` that contains same-page heading links becomes the native Confluence TOC; manually curated ordering and inline grouping are replaced by Confluence's automatic H2-H3 hierarchy.
 
 ## 🧑‍💻 Development
 
