@@ -316,8 +316,10 @@ function stripFrontmatter(md: string): string {
 function preprocessObsidianSyntax(md: string, opts?: PreprocessOptions): string {
 	// 先把代码区(fenced + inline)替换成占位符,避免代码示例里的 ![[...]] / [[...]] 被改写
 	const { masked, restore } = maskCodeRegions(md);
-	// `[!summary]+ 目录` 在 Obsidian 里继续显示手写目录,同步时改用 Confluence
-	// 官方 TOC 宏。必须在代码区屏蔽后执行,避免转换文档中的语法示例。
+	// `[!summary]+` 目录 / Contents / Table of Contents / TOC stays readable
+	// as a hand-written TOC in Obsidian; on sync it becomes Confluence's
+	// official TOC macro. Must run after code regions are masked so syntax
+	// examples in docs are not converted.
 	let s = replaceMarkdownTocCallouts(masked);
 
 	// 0. @[[Name]] / @[[Name|alias]] mention → PUA 哨兵(postProcessHtml 里替换为 <ac:link><ri:user>)。
@@ -616,7 +618,7 @@ function postProcessHtml(html: string, ctx: ConvertContext): string {
 		const re = new RegExp(`<${tag}\\b([^>]*?)(?<!/)>`, 'gi');
 		out = out.replace(re, `<${tag}$1 />`);
 	}
-	// `[!summary]+ 目录` 的整块手写链接列表 → Confluence 官方 TOC(H2-H3)。
+	// Hand-written TOC callout (目录 / Contents / Table of Contents / TOC) → Confluence official TOC (H2-H3).
 	out = replaceTocMarkersWithMacros(out);
 	// @[[Name]] mention 哨兵 → Confluence 用户链接(preprocess 阶段埋入,穿透 markdown-it 的 HTML 转义)
 	out = out.replace(/MENTION:([^]*)/g, (_full, username: string) => {

@@ -1,7 +1,21 @@
 const TOC_MARKER = 'CONFLUENCE_TOC';
 
-const TOC_CALLOUT_RE =
-	/^>[ \t]*\[!summary\][+-]?[ \t]+目录[ \t]*(?:\r?\n|$)(?:^>[^\r\n]*(?:\r?\n|$))*/gim;
+/** Longest-first so "Contents" does not match inside "Table of Contents". */
+const TOC_CALLOUT_TITLES = [
+	'Table of Contents',
+	'Contents',
+	'TOC',
+	'目录',
+] as const;
+
+const TOC_TITLE_ALT = TOC_CALLOUT_TITLES
+	.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+	.join('|');
+
+const TOC_CALLOUT_RE = new RegExp(
+	`^>[ \\t]*\\[!summary\\][+-]?[ \\t]+(?:${TOC_TITLE_ALT})[ \\t]*(?:\\r?\\n|$)(?:^>[^\\r\\n]*(?:\\r?\\n|$))*`,
+	'gim',
+);
 
 const WIKILINK_HEADING_RE = /\[\[#(?!\^)[^\]\r\n]+\]\]/;
 const MARKDOWN_HEADING_RE = /\[[^\]\r\n]+\]\((?:<#[^>\r\n]+>|#[^\s)\r\n]+)\)/;
@@ -14,11 +28,12 @@ const CONFLUENCE_TOC_MACRO =
 	'</ac:structured-macro>';
 
 /**
- * 把 Obsidian 中用于本地阅读的手写目录 callout 换成私有标记。
+ * Replace a hand-written Obsidian TOC callout with a private marker.
  *
- * 仅匹配标题为“目录”的 summary callout，且正文必须包含同页标题链接；
- * 这样普通 summary callout 不会被误判。调用方应先屏蔽代码区，避免代码
- * 示例中的 callout 语法被转换。
+ * Matches only summary callouts titled 目录, Contents, Table of Contents,
+ * or TOC, and only when the body contains same-page heading links — so
+ * ordinary summary callouts are not misclassified. Callers should mask
+ * code regions first so callout syntax in examples is not converted.
  */
 export function replaceMarkdownTocCallouts(markdown: string): string {
 	return markdown.replace(TOC_CALLOUT_RE, (block) => {
